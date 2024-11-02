@@ -6,7 +6,6 @@ from luo9 import message_handle, notice_handle
 
 app = Flask(__name__)
 
-
 @app.route('/', methods=['POST'])
 async def receive_event():
     data = request.json
