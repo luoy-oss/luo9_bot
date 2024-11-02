@@ -2,6 +2,9 @@
 *.db
 *.ini
 
+#忽略当前目录下的data目录
+/data
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
