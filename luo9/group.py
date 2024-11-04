@@ -2,13 +2,17 @@ import value
 import requests
 from flask import Flask, request
 
-async def send_group_message(group_id, message):
+async def send_group_message(group_id, message, ignore=True):
     if group_id in value.group_list:
         pass
     else:
-        print(group_id,"不在",value.group_list,"中")
-        print("消息阻断")
-        return
+        if ignore == True:
+            print(group_id,"不在",value.group_list,"中")
+            print("消息阻断")
+            return
+        else:
+            print("函数要求不屏蔽 ignore=False")
+            pass
 
     url = f"{value.base_url}/send_group_msg"
     params = {
