@@ -3,6 +3,8 @@ import plugins
 import luo9
 
 from plugins.chat_record import Record
+from luo9 import action
+
 
 '''
 {'self_id': 512166443, 'user_id': 2557657882, 'time': 1730539514, 'message_id': 1756106583, 'message_seq': 1756106583, 
@@ -50,7 +52,6 @@ async def message_handle(message_objects):
 
 
 async def group_message(message, group_id, user_id):
-    print(f"Processed message: {message}")
     path = await utils.data_path_check(group_id, user_id)        
     if message == "签到" or message == "打卡":
         await plugins.sign_in(group_id, user_id, path)
@@ -77,3 +78,16 @@ async def notice_handle(message_objects):
         # elif sub_type == 'kick':
         #     operator_id = message_objects['operator_id']
         #     await luo9.send_group_message(group_id, f"成员 [CQ:at,qq={user_id}] 被管理员 [CQ:at,qq={operator_id}] 踢出群聊。")
+    elif message_objects['notice_type'] == 'notify':
+        # 戳一戳(需要PacketServer才能进行回复)
+        if message_objects['sub_type'] == 'poke':
+            group_id = message_objects['group_id']
+            target_id = message_objects['target_id']
+            user_id = message_objects['user_id']
+            if 'group_id' in message_objects:
+                await action.poke_handle(target_id, user_id, group_id)            
+            else:
+                await action.poke_handle(target_id, user_id)
+
+        pass
+        
