@@ -1,6 +1,7 @@
 import utils
 import plugins
 import luo9
+import value
 
 from plugins.chat_record import Record
 from luo9 import action
@@ -61,12 +62,18 @@ async def group_message(message, group_id, user_id):
         await plugins.register(group_id, user_id, path)
     if message == "个人信息":
         await plugins.user_info(group_id, user_id, path)
+
+    if utils.at_check(message, value.bot_id) and utils.without_at(message, value.bot_id) == '舔狗日记':
+        msg = await api.舔狗日记()
+        if not "妈的" in msg and not "你妈" in msg and not "他妈" in msg and not "去死" in msg:
+            await luo9.send_group_message(group_id, msg, ignore=False)
+        else:
+            print("舔狗日记：不文明用语屏蔽")
+
     # if message == "一言":
     #     一言 = await api.一言()
     #     一言 = 一言['content']
     #     await luo9.send_group_message(group_id, 一言)
-
-
 
 
 async def notice_handle(message_objects):

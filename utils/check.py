@@ -1,6 +1,8 @@
-from utils import ini_files as ini
+import re
 import value
 import os, stat
+
+from utils import ini_files as ini
 
 async def data_path_check(group_id, qq):
     main_path = value.data_path
@@ -72,3 +74,8 @@ async def register_check(group_id, qq, data_path=""):
     return False
 
 
+def without_at(message, qq_id):
+    return re.sub(f'\[CQ:at,qq={qq_id}\]\s*', '', message)
+
+def at_check(message, qq_id):
+    return without_at(message, qq_id) != message

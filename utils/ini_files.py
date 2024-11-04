@@ -23,7 +23,11 @@ async def 写配置项(file, 节名称, 配置项名称="", 欲写入值=""):
         os.chmod(file, stat.S_IRWXO)
     config = ConfigParser()
     config.read(file)
-    if 配置项名称 == "":
+    if not config.has_section(节名称):
+        config[f'{节名称}'] = {
+            配置项名称: 欲写入值
+        }
+    elif 配置项名称 == "":
         config.remove_section(节名称)
     elif 欲写入值 == "":
         config.remove_option(节名称, 配置项名称)

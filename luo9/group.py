@@ -7,7 +7,7 @@ async def send_group_message(group_id, message, ignore=True):
         pass
     else:
         if ignore == True:
-            print(group_id,"不在",value.group_list,"中")
+            print(group_id,"不在", value.group_list,"中")
             print("消息阻断")
             return
         else:
