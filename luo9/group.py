@@ -62,7 +62,7 @@ async def send_group_image(group_id, file):
         print(response.status_code, response.text)
 
 async def send_group_poke(group_id, target_id, user_id):
-    # if str(user_id) != str(value.bot_id) and str(target_id) == str(value.bot_id):
+    # if user_id != value.bot_id and target_id == value.bot_id:
     #         url = f"{value.base_url}/group_poke"
     #         params = {
     #             "group_id": group_id,
