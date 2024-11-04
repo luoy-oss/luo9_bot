@@ -61,9 +61,10 @@ async def group_message(message, group_id, user_id):
         await plugins.register(group_id, user_id, path)
     if message == "个人信息":
         await plugins.user_info(group_id, user_id, path)
-    # if message == "摸鱼日历":
-    #     image_url = await api.摸鱼日历()
-    #     await luo9.send_group_image(group_id, image_url)
+    # if message == "一言":
+    #     一言 = await api.一言()
+    #     一言 = 一言['content']
+    #     await luo9.send_group_message(group_id, 一言)
 
 
 

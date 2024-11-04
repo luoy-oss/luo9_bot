@@ -41,4 +41,30 @@ async def 摸鱼日历():
         print("Failed api：摸鱼日历")
         print(response.status_code, response.text)
     return image_url
-    pass
+
+
+async def 一言():
+    url = f"https://api.vvhan.com/api/ian/dongman"
+    params = {
+        'type': 'json'
+    }
+    
+    response = requests.get(url, params=params)
+
+    一言 = {}
+    if response.status_code == 200:
+        response_json = response.json()
+        if response_json['success'] == True:
+            print("api：一言获取成功")
+            一言 = {
+                'creator':  response_json['data']['creator'],
+                'from':     response_json['data']['form'],
+                'content':  response_json['data']['content'],
+            }
+        else:
+            print("api：一言获取失败 success: False")
+    else:
+        print("Failed api：一言")
+        print(response.status_code, response.text)
+
+    return 一言
