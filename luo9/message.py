@@ -4,7 +4,7 @@ import luo9
 
 from plugins.chat_record import Record
 from luo9 import action
-
+from plugins import api
 
 '''
 {'self_id': 512166443, 'user_id': 2557657882, 'time': 1730539514, 'message_id': 1756106583, 'message_seq': 1756106583, 
@@ -61,6 +61,10 @@ async def group_message(message, group_id, user_id):
         await plugins.register(group_id, user_id, path)
     if message == "个人信息":
         await plugins.user_info(group_id, user_id, path)
+    # if message == "摸鱼日历":
+    #     image_url = await api.摸鱼日历()
+    #     await luo9.send_group_image(group_id, image_url)
+
 
 
 

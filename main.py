@@ -1,9 +1,10 @@
 #main.py
-from flask import Flask, request
-import plugins
-import utils
 import value
+import signal
+
+from flask import Flask, request
 from luo9 import message_handle, notice_handle
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
@@ -22,5 +23,16 @@ async def receive_event():
 
     return "OK", 200
 
-if __name__ == '__main__':
+def run_flask():
     app.run(host='0.0.0.0', port=7777)
+
+def signal_handler(sig, frame):
+    print('\r\n用户终止')
+    # 在这里执行清理工作，比如关闭数据库连接
+    exit(0)
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
+    with ThreadPoolExecutor() as executor:
+        executor.submit(run_flask)
