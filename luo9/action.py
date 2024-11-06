@@ -13,6 +13,8 @@ async def poke_handle(target_id, user_id, group_id=''):
     if group_id != '':
         # 目标为bot本身
         if target_id == value.bot_id:
+            global 一言_limit
+            global 情话_limit
             if utils.random_run(0.5):
                 一言 = await api.一言()
                 if 一言 != {} and 一言_limit.check(1):

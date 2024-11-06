@@ -68,6 +68,10 @@ async def group_message(message, group_id, user_id):
         await plugins.user_info(group_id, user_id, path)
 
     elif utils.at_check(message, value.bot_id):
+        global 摸鱼日历_limit
+        global 舔狗日记_limit
+        global 一言_limit
+        global 情话_limit
         if 舔狗日记_limit.check(2) and utils.without_at(message, value.bot_id) == '舔狗日记':
             msg = await api.舔狗日记()
             if not "妈的" in msg and not "你妈" in msg and not "他妈" in msg and not "去死" in msg and not "TT" in msg:
