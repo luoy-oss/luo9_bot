@@ -17,7 +17,7 @@ def schedule_run():
 
     scheduler.add_job(  
         摸鱼日历_task, 
-        trigger ='cron', second=0, minute=0, hour=0)
+        trigger ='cron', second=0, minute=0, hour=6)
 
     scheduler.add_job(  
         B站直播检测_task, 
@@ -47,7 +47,7 @@ async def B站直播检测_task():
         live_flag = '1'
         await ini.写配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', live_flag)
         for group_id in value.B站直播检测_task_list:
-            await luo9.send_group_message(group_id, msg)
+            await luo9.send_group_message(group_id, msg, ignore=False)
             await asyncio.sleep(1)    # 延迟1秒
     if status == 0 and live_flag == '1':
         live_flag = '0'
