@@ -3,7 +3,7 @@ import plugins
 import luo9
 import value
 
-from plugins.chat_record import Record
+from plugins.chat import Record
 from luo9 import action
 from plugins import api
 
@@ -51,24 +51,28 @@ async def message_handle(message_objects):
     if message_objects['message_type'] == 'private':
         pass
 
-
 async def group_message(message, group_id, user_id):
     path = await utils.data_path_check(group_id, user_id)        
     if message == "签到" or message == "打卡":
         await plugins.sign_in(group_id, user_id, path)
-    if message == "查询":
+    elif message == "查询":
         await plugins.query_data(group_id, user_id, path)
-    if message == "注册":
+    elif message == "注册":
         await plugins.register(group_id, user_id, path)
-    if message == "个人信息":
+    elif message == "个人信息":
         await plugins.user_info(group_id, user_id, path)
 
-    if utils.at_check(message, value.bot_id) and utils.without_at(message, value.bot_id) == '舔狗日记':
+    elif utils.at_check(message, value.bot_id) and utils.without_at(message, value.bot_id) == '舔狗日记':
         msg = await api.舔狗日记()
         if not "妈的" in msg and not "你妈" in msg and not "他妈" in msg and not "去死" in msg:
             await luo9.send_group_message(group_id, msg, ignore=False)
         else:
             print("舔狗日记：不文明用语屏蔽")
+    else:
+        # 非指令状态下进行复读
+        await plugins.repeat(message, group_id)
+
+
 
     # if message == "一言":
     #     一言 = await api.一言()

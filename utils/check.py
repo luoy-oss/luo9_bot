@@ -1,5 +1,6 @@
 import re
 import value
+import sqlite3
 import os, stat
 
 from utils import ini_files as ini
@@ -79,3 +80,23 @@ def without_at(message, qq_id):
 
 def at_check(message, qq_id):
     return without_at(message, qq_id) != message
+
+async def duplicate_message_check(message, group_id, check_num):
+    data_path = value.data_path + '/{group_id}/'.format(group_id=group_id)
+    group_path = data_path
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
+        os.chmod(data_path, stat.S_IRWXO)
+        
+    data_path = group_path + '/chat_record.db'
+    record_file = data_path
+    if os.path.isfile(data_path):
+        conn = sqlite3.connect(data_path)
+        cursor = conn.cursor()
+        cursor.execute('select content from \'record\' order by id desc limit {check_num};'.format(check_num=check_num))
+        records = cursor.fetchall()
+        conn.commit()
+        conn.close()
+        if len(records) >= 3 and records[0] == records[1] == records[2]:
+            return True
+    return False
