@@ -68,3 +68,24 @@ async def 一言():
         print(response.status_code, response.text)
 
     return 一言
+async def 情话():
+    url = f"https://api.vvhan.com/api/text/love"
+    params = {
+        'type': 'json'
+    }
+    
+    response = requests.get(url, params=params)
+
+    情话 = ''
+    if response.status_code == 200:
+        response_json = response.json()
+        if response_json['success'] == True:
+            print("api：情话获取成功")
+            情话 = response_json['data']['content']
+        else:
+            print("api：情话获取失败 success: False")
+    else:
+        print("Failed api：情话")
+        print(response.status_code, response.text)
+    return 情话
+    
