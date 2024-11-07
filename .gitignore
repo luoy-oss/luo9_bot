@@ -5,6 +5,8 @@
 #忽略当前目录下的data目录
 /data
 
+value.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
