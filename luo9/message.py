@@ -47,8 +47,8 @@ async def message_handle(message_objects):
         user_id =  message_objects['user_id']
         
         # if (group_id == 427124964 ): # or group_id == 706730261
-        if group_id != 961949571:
-            await group_message(message, group_id, user_id)
+        # if group_id != 961949571:
+        await group_message(message, group_id, user_id)
     if message_objects['message_type'] == 'private':
         pass
 
@@ -58,16 +58,15 @@ async def message_handle(message_objects):
 情话_limit = MessageLimit('情话')
 async def group_message(message, group_id, user_id):
     path = await utils.data_path_check(group_id, user_id)        
-    if message == "签到" or message == "打卡":
-        await plugins.sign_in(group_id, user_id, path)
-    elif message == "查询":
-        await plugins.query_data(group_id, user_id, path)
-    elif message == "注册":
-        await plugins.register(group_id, user_id, path)
-    elif message == "个人信息":
-        await plugins.user_info(group_id, user_id, path)
-
-    elif utils.at_check(message, value.bot_id):
+    # if message == "签到" or message == "打卡":
+    #     await plugins.sign_in(group_id, user_id, path)
+    # elif message == "查询":
+    #     await plugins.query_data(group_id, user_id, path)
+    # elif message == "注册":
+    #     await plugins.register(group_id, user_id, path)
+    # elif message == "个人信息":
+    #     await plugins.user_info(group_id, user_id, path)
+    if utils.at_check(message, value.bot_id):
         global 摸鱼日历_limit
         global 舔狗日记_limit
         global 一言_limit
@@ -94,13 +93,6 @@ async def group_message(message, group_id, user_id):
     else:
         # 非指令状态下进行复读
         await plugins.repeat(message, group_id)
-
-
-
-    # if message == "一言":
-    #     一言 = await api.一言()
-    #     一言 = 一言['content']
-    #     await luo9.send_group_message(group_id, 一言)
 
 
 async def notice_handle(message_objects):
