@@ -17,7 +17,7 @@ def schedule_run():
 
     scheduler.add_job(  
         摸鱼日历_task, 
-        trigger ='cron', second=0, minute=0, hour=6)
+        trigger ='cron', second=0, minute=0, hour=12)
 
     scheduler.add_job(  
         B站直播检测_task, 
