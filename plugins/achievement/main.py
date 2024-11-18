@@ -5,7 +5,7 @@ import os, stat
 import sqlite3
 from random import choices
 from plugins.festival import FestivalCalendar
-from .value import festival_achievement
+from .data_value import festival_achievement
 
 
 async def get_achievement(group_id, qq, path):

@@ -23,6 +23,10 @@ def schedule_run():
         B站直播检测_task, 
         trigger ='interval', minutes=1)
 
+    scheduler.add_job(  
+        节日检测_task, 
+        trigger ='cron', second=0, minute=0, hour=6)
+
     scheduler.start()
     try:
         print("定时任务执行！")
@@ -52,3 +56,35 @@ async def B站直播检测_task():
     if status == 0 and live_flag == '1':
         live_flag = '0'
         await ini.写配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', live_flag)  
+
+from plugins.achievement.data_value import festival_achievement
+from plugins.festival import FestivalCalendar
+
+async def 节日检测_task():
+    festival = FestivalCalendar()
+    element = festival.getCalendarDetail()
+    is_match = False
+    if element['阳历节日'] != '' or element['农历节日'] != '':
+        festival_today = element['阳历节日'] + element['农历节日']
+        msg = ''
+        for festival, temp in festival_achievement.items():
+            if festival in element['阳历节日'] or festival in element['农历节日']:
+                is_match = True
+                msg += f'今天是{festival}\n艾特我，发送以下任意指令：\n{festival}快乐\n'
+                orders = festival_achievement[festival]['指令']
+                for order in orders:
+                    msg += order + '\n'
+                msg += '领取节日礼物吧！'
+        
+        if not is_match:
+            msg += f'今天是{festival_today}。'
+
+        for group_id in value.节日检测_task_list:
+            await luo9.send_group_message(group_id, msg)
+            await asyncio.sleep(1)    # 延迟1秒
+    else:
+        print("今天无节日")
+    pass
+
+
+
