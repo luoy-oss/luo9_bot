@@ -10,7 +10,10 @@ async def 读配置项(file, 节名称, 配置项名称, 默认值=""):
     config.read(file)
     读取到的值 = ""
     if config.has_section(节名称):
-        读取到的值 = config[节名称][配置项名称]
+        if config.has_option(节名称, 配置项名称):
+            读取到的值 = config[节名称][配置项名称]
+        else:
+            print("WARNING: 配置项名称{name}不存在".format(name = 配置项名称))    
     else:
         print("WARNING: 节名称{name}不存在".format(name = 节名称))    
     if 读取到的值 == "":

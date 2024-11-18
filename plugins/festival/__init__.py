@@ -1,1 +1,1 @@
-from .festival import SimpleCalendar
+from .main import SimpleCalendar
