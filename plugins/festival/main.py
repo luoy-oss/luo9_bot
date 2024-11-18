@@ -4,9 +4,9 @@ from .date_value import *
 from .element import Element
 import re
 
-__all__ = ['SimpleCalendar']
+__all__ = ['FestivalCalendar']
 
-class SimpleCalendar:
+class FestivalCalendar:
     def __init__(self):
         self.elements = []
         self.cache = {}
@@ -20,7 +20,7 @@ class SimpleCalendar:
         day = date.day
 
         cacheKey = f'{year}-{month}'
-        lunarCalendarUtil = SimpleCalendar()
+        lunarCalendarUtil = FestivalCalendar()
         lunarCalendarUtil.calendar(year, month)
         self.cache[cacheKey] = lunarCalendarUtil
 
@@ -307,6 +307,6 @@ class SimpleCalendar:
 
 
 if __name__ == '__main__':
-    temp = SimpleCalendar()
+    temp = FestivalCalendar()
     element = temp.getCalendarDetail()
     print(element)

@@ -67,8 +67,13 @@ async def group_message(message, group_id, user_id):
             await plugins.user_info(group_id, user_id, path)
         elif message == "我的成就":
             await plugins.get_achievement(group_id, user_id, path)
-        
+            
     if utils.at_check(message, value.bot_id):
+        if group_id != 961949571:
+            festival_reward = await plugins.festival_match(utils.without_at(message, value.bot_id), group_id, user_id, path)
+            if festival_reward['status'] == True:
+                print(festival_reward['rewards'])
+                pass
         global 摸鱼日历_limit
         global 舔狗日记_limit
         global 一言_limit
