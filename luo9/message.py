@@ -54,6 +54,7 @@ async def message_handle(message_objects):
 舔狗日记_limit = MessageLimit('舔狗日记')
 一言_limit = MessageLimit('一言')
 情话_limit = MessageLimit('情话')
+一言_网易云_limit = MessageLimit('一言_网易云')
 async def group_message(message, group_id, user_id):
     path = await utils.data_path_check(group_id, user_id)        
     if group_id != 961949571:
@@ -77,26 +78,30 @@ async def group_message(message, group_id, user_id):
         global 摸鱼日历_limit
         global 舔狗日记_limit
         global 一言_limit
-        global 情话_limit
+        global 情话_limit·
         if 舔狗日记_limit.check(2) and utils.without_at(message, value.bot_id) == '舔狗日记':
             msg = await api.舔狗日记()
             if not "妈的" in msg and not "你妈" in msg and not "他妈" in msg and not "去死" in msg and not "TT" in msg:
                 await luo9.send_group_message(group_id, msg, ignore=False)
             else:
                 print("舔狗日记：不文明用语屏蔽")
-        # 60s回复屏蔽
-        if 摸鱼日历_limit.check(60) and utils.without_at(message, value.bot_id) == '摸鱼日历':
-            image_url = await api.摸鱼日历()
-            await luo9.send_group_image(group_id, image_url)
+        # # 60s回复屏蔽
+        # if 摸鱼日历_limit.check(60) and utils.without_at(message, value.bot_id) == '摸鱼日历':
+        #     image_url = await api.摸鱼日历()
+        #     await luo9.send_group_image(group_id, image_url)
         if 一言_limit.check(2) and utils.without_at(message, value.bot_id) == '一言':
             一言 = await api.一言()
             if 一言 != {}:
                 message = '{一言_content}    ——来自《{一言_from}》'.format(一言_content=一言['content'], 一言_from=一言['from'])
                 await luo9.send_group_message(group_id, message, ignore=False)
-        if 情话_limit.check(2) and utils.without_at(message, value.bot_id) == '情话':
-            情话 = await api.情话()
-            if 情话 != '':
-                await luo9.send_group_message(group_id, 情话, ignore=False)  
+        # if 情话_limit.check(2) and utils.without_at(message, value.bot_id) == '情话':
+        #     情话 = await api.情话()
+        #     if 情话 != '':
+        #         await luo9.send_group_message(group_id, 情话, ignore=False)  
+        if 一言_网易云_limit.check(2) and utils.without_at(message, value.bot_id) == '网易云':
+            一言_网易云 = await api.一言_网易云()
+            if 一言_网易云 != '':
+                await luo9.send_group_message(group_id, 一言_网易云, ignore=False)  
     else:
         # 非指令状态下进行复读
         await plugins.repeat(message, group_id)

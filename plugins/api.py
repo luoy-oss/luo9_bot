@@ -44,9 +44,9 @@ async def 摸鱼日历():
 
 
 async def 一言():
-    url = f"https://api.vvhan.com/api/ian/dongman"
+    url = f"https://v1.hitokoto.cn"
     params = {
-        'type': 'json'
+        'c': 'b'
     }
     
     response = requests.get(url, params=params)
@@ -54,15 +54,15 @@ async def 一言():
     一言 = {}
     if response.status_code == 200:
         response_json = response.json()
-        if response_json['success'] == True:
-            print("api：一言获取成功")
-            一言 = {
-                'creator':  response_json['data']['creator'],
-                'from':     response_json['data']['form'],
-                'content':  response_json['data']['content'],
-            }
-        else:
-            print("api：一言获取失败 success: False")
+        # if response_json['success'] == True:
+        print("api：一言获取成功")
+        一言 = {
+            'creator':  response_json['creator'],
+            'from':     response_json['from'],
+            'content':  response_json['hitokoto'],
+        }
+        # else:
+        #     print("api：一言获取失败 success: False")
     else:
         print("Failed api：一言")
         print(response.status_code, response.text)
@@ -88,4 +88,25 @@ async def 情话():
         print("Failed api：情话")
         print(response.status_code, response.text)
     return 情话
+
+async def 一言_网易云():
+    url = f"https://v1.hitokoto.cn"
+    params = {
+        'c': 'j'
+    }
     
+    response = requests.get(url, params=params)
+
+    一言_网易云 = {}
+    if response.status_code == 200:
+        response_json = response.json()
+        # if response_json['success'] == True:
+        print("api：一言_网易云获取成功")
+        一言_网易云 = response_json['hitokoto']
+        # else:
+        #     print("api：一言_网易云获取失败 success: False")
+    else:
+        print("Failed api：一言_网易云")
+        print(response.status_code, response.text)
+
+    return 一言_网易云
