@@ -25,7 +25,7 @@ async def receive_event():
     return "OK", 200
 
 def run_flask():
-    app.run(host='0.0.0.0', port=7777)
+    app.run(host='0.0.0.0', port=17777)
 
 def signal_handler(sig, frame):
     print('\r\n用户终止')
