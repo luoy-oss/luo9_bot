@@ -1,4 +1,6 @@
-import value
+from config import get_value
+value = get_value()
+
 import luo9
 import utils
 

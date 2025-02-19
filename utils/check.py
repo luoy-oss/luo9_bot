@@ -1,5 +1,7 @@
+from config import get_value
+value = get_value()
+
 import re
-import value
 import sqlite3
 import os, stat
 

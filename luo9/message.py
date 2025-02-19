@@ -1,7 +1,9 @@
+from config import get_value
+value = get_value()
+
 import utils
 import plugins
 import luo9
-import value
 
 from plugins.chat import Record
 from luo9 import action
@@ -9,34 +11,56 @@ from plugins import api
 from utils.message_limit import MessageLimit
 
 '''
-{'self_id': 512166443, 'user_id': 2557657882, 'time': 1730539514, 'message_id': 1756106583, 'message_seq': 1756106583, 
-'real_id': 1756106583, 
-'message_type': 'group', 
-'sender': {'user_id': 2557657882, 'nickname': '寂寞的根号二', 'card': '洛', 'role': 'owner'}, 
-'raw_message': '[CQ:at,qq=2557657882] 你好世界[CQ:face,id=63]', 
-'font': 14, 
-'sub_type': 'normal', 
-'message': '[CQ:at,qq=2557657882] 你好世界[CQ:face,id=63]', 
-'message_format': 'string', 
-'post_type': 'message', 
-'group_id': 427124964}
-
-
+{
+  "self_id": "BOT_ID",
+  "user_id": "USER_ID",
+  "time": 1730539514,
+  "message_id": 1756106583,
+  "message_seq": 1756106583,
+  "real_id": 1756106583,
+  "message_type": "group",
+  "sender": {
+    "user_id": "USER_ID",
+    "nickname": "用户A",
+    "card": "洛",
+    "role": "owner"
+  },
+  "raw_message": "[CQ:at,qq=USER_ID] 你好世界[CQ:face,id=63]",
+  "font": 14,
+  "sub_type": "normal",
+  "message": "[CQ:at,qq=USER_ID] 你好世界[CQ:face,id=63]",
+  "message_format": "string",
+  "post_type": "message",
+  "group_id": GROUP_ID
+}
 
 {
-'self_id': 512166443, 
-'user_id': 2557657882, 
-'time': 1730539245, 
-'message_id': 1846233392, 
-'message_seq': 1846233392, 
-'real_id': 1846233392, 
-'message_type': 'private', 
-'sender': {'user_id': 2557657882, 'nickname': '寂寞的根号二', 'card': ''}, 
-'raw_message': '你好世界', 
-'font': 14, 
-'sub_type': 'friend', 
-'message': [{'type': 'text', 'data': {'text': '你好世界'}}], 
-'message_format': 'array', 'post_type': 'message'}
+  "self_id": "BOT_ID",
+  "user_id": "USER_ID",
+  "time": 1730539245,
+  "message_id": 1846233392,
+  "message_seq": 1846233392,
+  "real_id": 1846233392,
+  "message_type": "private",
+  "sender": {
+    "user_id": "USER_ID",
+    "nickname": "用户A",
+    "card": ""
+  },
+  "raw_message": "你好世界",
+  "font": 14,
+  "sub_type": "friend",
+  "message": [
+    {
+      "type": "text",
+      "data": {
+        "text": "你好世界"
+      }
+    }
+  ],
+  "message_format": "array",
+  "post_type": "message"
+}
 '''
 
 @Record
@@ -50,7 +74,6 @@ async def message_handle(message_objects):
     if message_objects['message_type'] == 'private':
         pass
 
-摸鱼日历_limit = MessageLimit('摸鱼日历')
 舔狗日记_limit = MessageLimit('舔狗日记')
 一言_limit = MessageLimit('一言')
 情话_limit = MessageLimit('情话')
@@ -75,7 +98,6 @@ async def group_message(message, group_id, user_id):
             if festival_reward['status'] == True:
                 print(festival_reward['rewards'])
                 pass
-        global 摸鱼日历_limit
         global 舔狗日记_limit
         global 一言_limit
         global 情话_limit·
@@ -85,10 +107,6 @@ async def group_message(message, group_id, user_id):
                 await luo9.send_group_message(group_id, msg, ignore=False)
             else:
                 print("舔狗日记：不文明用语屏蔽")
-        # # 60s回复屏蔽
-        # if 摸鱼日历_limit.check(60) and utils.without_at(message, value.bot_id) == '摸鱼日历':
-        #     image_url = await api.摸鱼日历()
-        #     await luo9.send_group_image(group_id, image_url)
         if 一言_limit.check(2) and utils.without_at(message, value.bot_id) == '一言':
             一言 = await api.一言()
             if 一言 != {}:

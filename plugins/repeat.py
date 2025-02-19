@@ -1,6 +1,8 @@
+from config import get_value
+value = get_value()
+
 import utils
 import luo9
-import value
 
 repeate_message = ''
 

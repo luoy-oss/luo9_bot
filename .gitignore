@@ -2,10 +2,11 @@
 *.db
 *.ini
 
+# 忽略本地config.yaml配置文件，保留样例(example)文件
+config.yaml
+
 #忽略当前目录下的data目录
 /data
-
-value.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,6 +1,9 @@
+from config import get_value
+value = get_value()
+
 import utils
 import luo9
-import value
+
 import os, stat
 import sqlite3
 from random import choices
