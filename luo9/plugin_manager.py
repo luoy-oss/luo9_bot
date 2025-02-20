@@ -1,5 +1,5 @@
 import importlib
-import os
+import os, stat
 import yaml
 from pathlib import Path
 
@@ -38,6 +38,12 @@ class PluginManager:
                         'priority': plugin_config['priority'],
                         'message_types': plugin_module.config['message_types']
                     }
+                    
+                    plugin_data_path = f"{value.data_path}/plugins/{plugin['name']}"
+                    print(plugin_data_path)
+                    if not os.path.exists(plugin_data_path):
+                        os.makedirs(plugin_data_path)
+                        os.chmod(plugin_data_path, stat.S_IRWXO)
                     print(f"加载插件：{plugin['name']}\n作者：{plugin['author']}\n插件描述：{plugin['describe']}\n插件版本：{plugin['version']}\n插件需求：{plugin_module.config['message_types']}")
                     print_flip()
                     load_num = load_num + 1

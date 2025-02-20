@@ -6,7 +6,6 @@ import plugins
 
 from utils.record import Record
 from plugins import api
-from utils.message_limit import MessageLimit
 
 from luo9.plugin_manager import plugin_manager
 

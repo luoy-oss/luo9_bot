@@ -1,18 +1,16 @@
-from datetime import datetime 
-class MessageLimit:
-    def __init__(self, tag):
-        self.time_now = datetime.now()
-        self.time_before = datetime(2000, 1, 1, 0, 0, 0, 0) 
-        self.tag = tag
+import time
 
-    def check(self, seconds):
-        self.handle()
-        if (self.time_now - self.time_before).seconds > seconds:
-            self.time_before = datetime.now()
+class MessageLimit:
+    def __init__(self, name):
+        self.name = name
+        self.current_time = 0
+        self.last_triggered = 0  # 初始化最后一次触发时间为0
+
+    def check(self, interval):
+        self.current_time = time.time()
+        if self.current_time - self.last_triggered >= interval:
             return True
-        else:
-            return False
+        return False
     def handle(self):
-        self.time_now = datetime.now()
-    def get_tag(self):
-        return self.tag
+        # 更新最后触发时间
+        self.last_triggered = self.current_time

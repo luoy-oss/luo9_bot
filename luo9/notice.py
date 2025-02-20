@@ -5,19 +5,8 @@ import utils
 import plugins
 
 from utils.record import Record
-from plugins import api
-from utils.message_limit import MessageLimit
 
 from luo9.plugin_manager import plugin_manager
-
-from plugins import api
-from utils.message_limit import MessageLimit
-
-from luo9.plugin_manager import plugin_manager
-
-一言_limit = MessageLimit('一言')
-情话_limit = MessageLimit('情话')
-一言_网易云_limit = MessageLimit('一言_网易云')
 
 async def poke_handle(target_id, user_id, group_id=''):
     # 群戳一戳

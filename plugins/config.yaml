@@ -13,3 +13,6 @@ plugins:
   - name: achievement
     priority: 10
     enable: true
+  - name: sky
+    priority: 20
+    enable: true
