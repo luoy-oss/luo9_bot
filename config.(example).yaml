@@ -13,7 +13,7 @@ napcat:
     port: 6001
     token: 'clients_token'
 
-data_path : '/home/ubuntu/luo9/luo9_bot/data/'
+PATH: '/home/ubuntu/luo9/luo9_bot/'
 
 bot_id : 1111111111
 master : 1111111111

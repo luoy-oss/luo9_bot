@@ -1,0 +1,15 @@
+# 优先级值越小，优先级越高
+# 即priority 1 > priority 2
+plugins:
+  - name: core_plugin
+    priority: 1
+    enabled: true
+  - name: repeat
+    priority: 999
+    enabled: true
+  - name: api
+    priority: 10
+    enabled: true
+  - name: achievement
+    priority: 10
+    enabled: true

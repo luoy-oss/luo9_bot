@@ -1,3 +1,12 @@
+config = {
+    'name': 'achievement',
+    'describe': '成就模块',
+    'dependency': 'festival',
+    'author': 'drluo',
+    'version': '1.0.0',
+    'message_types': ['group']
+}
+
 from config import get_value
 value = get_value()
 
@@ -9,6 +18,17 @@ import sqlite3
 from random import choices
 from plugins.festival import FestivalCalendar
 from .data_value import festival_achievement
+
+async def group_handle(message, group_id, user_id):
+    path = await utils.data_path_check(group_id, user_id)
+    if utils.at_check(message, value.bot_id):
+        festival_reward = await festival_match(utils.without_at(message, value.bot_id), group_id, user_id, path)
+        if festival_reward['status'] == True:
+            print(festival_reward['rewards'])
+            pass
+
+    if message == "我的成就":
+        await get_achievement(group_id, user_id, path)
 
 
 async def get_achievement(group_id, qq, path):

@@ -5,7 +5,10 @@ class Value:
     def __init__(self, config):
         try:
             # NapCatQQ API的基础URL
-            self.data_path = config['data_path']
+            self.PATH = config['PATH']
+            self.data_path = config['PATH'] + '/data'
+            self.plugin_path = config['PATH'] + '/plugins'
+            self.core_path = config['PATH'] + '/luo9'
             
             self.bot_id = config['bot_id']
             self.master = config['master']
