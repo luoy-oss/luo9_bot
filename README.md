@@ -14,11 +14,17 @@ git clone https://github.com/luoy-oss/luo9_bot.git
 cd luo9_bot
 ```
 
+> 安装依赖
+```
+pip install -r requiremes.txt
+```
+
+
 > 运行
 >
 > **运行前请进行基础config配置**
 ```
-sudo python3 main.py
+python3 main.py
 ```
 
 ## 基础配置
