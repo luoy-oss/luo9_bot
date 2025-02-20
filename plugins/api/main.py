@@ -3,7 +3,7 @@ config = {
     'describe': '一言 情话 网易云 舔狗日记',
     'author': 'drluo',
     'version': '1.0.0',
-    'message_types': ['group']
+    'message_types': ['group_message','group_poke']
 }
 
 from config import get_value
@@ -11,7 +11,7 @@ value = get_value()
 
 import requests
 import utils
-import luo9
+from luo9.api_manager import luo9
 from utils.message_limit import MessageLimit
 
 舔狗日记_limit = MessageLimit('舔狗日记')
@@ -42,6 +42,29 @@ async def group_handle(message, group_id, user_id):
             api_msg = await 一言_网易云()
             if api_msg != '':
                 await luo9.send_group_message(group_id, api_msg, ignore=False)  
+
+import random
+async def group_poke_handle(target_id, user_id, group_id):
+    # 目标为bot本身
+    if target_id == value.bot_id:
+        global 一言_limit
+        global 情话_limit
+        global 一言_网易云_limit
+        choice = random.choice([1,2,3])
+        if choice == 1:
+            api_msg = await 一言()
+            if api_msg != {} and 一言_limit.check(1):
+                message = '{一言_content}    ——来自《{一言_from}》'.format(一言_content=api_msg['content'], 一言_from=api_msg['from'])
+                await luo9.send_group_message(group_id, message, ignore=False)
+        if choice == 2:
+            api_msg = await 情话()
+            if api_msg != '' and 情话_limit.check(1):
+                await luo9.send_group_message(group_id, api_msg, ignore=False)    
+        if choice == 3:
+            api_msg = await 一言_网易云()
+            if api_msg != '' and 一言_网易云_limit.check(1):
+                await luo9.send_group_message(group_id, api_msg, ignore=False)         
+
 
 
 async def 舔狗日记():

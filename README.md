@@ -55,19 +55,25 @@ config = {
     'describe': '签到注册模块',
     'author': 'drluo',
     'version': '1.0.0',
-    'message_types': ['group']
+    'message_types': ['group_message', 'private_message', 'group_poke']
 }
 
 # message_types 支持 group, private
 # 当前未编写private消息处理部分，请留意
 
-# 对于message_types 含有 group，你必须同步编写以下函数用于接受传递给插件的群消息：
+# 对于message_types 含有 group_message，你必须同步编写以下函数用于接受传递给插件的群消息：
 async def group_handle(message, group_id, user_id):
     pass
 # 其中message为群消息内容，group_id为群号，user_id为用户qq号
 
-# 对于message_types 含有 private，你必须同步编写：
-async def private_handle(message, group_id, user_id):
+# 对于message_types 含有 group_poke，你必须同步编写以下函数用于接受传递给插件的群消息：
+async def group_poke_handle(target_id, user_id, group_id):
+    pass
+# 对于A用户戳了一下B用户
+# 其中target_id为B用户，user_id为A用户，group_id为群号
+
+# 对于message_types 含有 private_message，你必须同步编写：
+async def private_handle(message, user_id):
     pass
 
 # 你可以在插件代码中通过以下形式，获取全局config.yaml中配置的参数

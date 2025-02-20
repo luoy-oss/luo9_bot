@@ -3,7 +3,7 @@ config = {
     'describe': '签到注册模块',
     'author': 'drluo',
     'version': '1.0.0',
-    'message_types': ['group']
+    'message_types': ['group_message']
 }
 
 from .daily_sign_in import sign_in, query_data, user_info

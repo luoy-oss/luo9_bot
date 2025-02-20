@@ -47,14 +47,18 @@ class PluginManager:
 
     async def handle_group_message(self, message, group_id, user_id):
         for plugin in sorted(self.plugins, key=lambda x: x['priority']):
-            if 'group' in plugin['message_types']:
-                # pass
+            if 'group_message' in plugin['message_types']:
                 await plugin['module'].group_handle(message, group_id, user_id)
 
     async def handle_private_message(self, message, user_id):
         for plugin in sorted(self.plugins, key=lambda x: x['priority']):
-            if 'private' in plugin['message_types']:
+            if 'private_message' in plugin['message_types']:
                 await plugin['module'].private_handle(message, user_id)
+
+    async def handle_group_poke(self, target_id, user_id, group_id):
+        for plugin in sorted(self.plugins, key=lambda x: x['priority']):
+            if 'group_poke' in plugin['message_types']:
+                await plugin['module'].group_poke_handle(target_id, user_id, group_id)
 
 from config import get_value
 value = get_value()

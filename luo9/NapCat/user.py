@@ -6,7 +6,7 @@ import requests
 
 
 # 发送群聊消息的函数
-def send_private_msg(user_id, message):
+async def send_private_msg(user_id, message):
     url = f"{value.base_url}/send_private_msg"
     params = {
         "user_id": user_id,

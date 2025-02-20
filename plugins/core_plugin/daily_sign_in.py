@@ -2,7 +2,7 @@ from config import get_value
 value = get_value()
 
 import utils
-import luo9
+from luo9.api_manager import luo9
 import random
 
 from utils import ini_files as ini

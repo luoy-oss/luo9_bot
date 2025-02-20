@@ -4,14 +4,14 @@ config = {
     'dependency': 'festival',
     'author': 'drluo',
     'version': '1.0.0',
-    'message_types': ['group']
+    'message_types': ['group_message']
 }
 
 from config import get_value
 value = get_value()
 
 import utils
-import luo9
+from luo9.api_manager import luo9
 
 import os, stat
 import sqlite3
