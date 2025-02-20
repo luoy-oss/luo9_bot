@@ -23,7 +23,7 @@ class PluginManager:
         
         load_num = 0
         for plugin_config in config['plugins']:
-            if plugin_config['enabled']:
+            if plugin_config['enable']:
                 plugin_name = plugin_config['name']
                 plugin_path = os.path.join(self.plugin_dir, plugin_name)
                 if os.path.isdir(plugin_path):

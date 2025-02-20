@@ -3,13 +3,13 @@
 plugins:
   - name: core_plugin
     priority: 1
-    enabled: true
+    enable: true
   - name: repeat
     priority: 999
-    enabled: true
+    enable: true
   - name: api
     priority: 10
-    enabled: true
+    enable: true
   - name: achievement
     priority: 10
-    enabled: true
+    enable: true
