@@ -33,13 +33,11 @@ def calculate_delay(message_list):
 
         current_message_length = len(current_message)
 
-        # 计算延迟时间
         delay = current_message_length / typing_speed
         delays.append(delay)
 
     return delays
 
-# 异步任务：从队列中取出消息并发送
 async def message_sender(group_id, message_list):
     delays = calculate_delay(message_list)
     for index, message in enumerate(message_list):
@@ -51,11 +49,8 @@ async def message_sender(group_id, message_list):
 
     group_handle.sender_started = False
 
-
-# 启动消息发送任务
 async def start_message_sender(group_id, message_list):
     asyncio.create_task(message_sender(group_id, message_list))
-
 
 def __load_config(path, file_name):
     config_path = os.path.join(path, file_name)
@@ -71,11 +66,10 @@ def __load_config(path, file_name):
 
 __ai_config = __load_config(value.plugin_path + '/ai_chat', 'config.yaml')
 
-# 初始化OpenAI客户端
 client = OpenAI(
     api_key=__ai_config['DEEPSEEK_API_KEY'],
     base_url=__ai_config['DEEPSEEK_BASE_URL'],
-    default_headers={"Content-Type": "application/json"}  # 添加默认请求头
+    default_headers={"Content-Type": "application/json"}
 )
 
 # 获取程序根目录
@@ -91,20 +85,17 @@ except FileNotFoundError:
     with open(file_path, "r", encoding="utf-8") as file:
         prompt_content = file.read()
 
-# 配置日志
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# 全局变量
-user_queues = {}  # 用户消息队列管理
+user_queues = {}  # 用户消息
 queue_lock = threading.Lock()  # 队列访问锁
-chat_contexts = {}  # 存储上下文
-active_conversations = set()  # 存储当前活跃的对话
+chat_contexts = {}  # 上下文
+active_conversations = set()  # 当前活跃对话
 
-# 常量
 MAX_GROUPS = 5  # 最大对话轮次
 MAX_TOKEN = 1000  # 最大token数
 TEMPERATURE = 0.7  # 温度参数
