@@ -1,0 +1,5 @@
+DEEPSEEK_API_KEY : 'your_api_key'
+DEEPSEEK_BASE_URL : 'https://api.lkeap.cloud.tencent.com/v1'
+model: 'deepseek-v3' # 替换为你选择的模型名称
+
+prompts: 'default_prompt.txt'

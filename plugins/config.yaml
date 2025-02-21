@@ -16,3 +16,6 @@ plugins:
   - name: sky
     priority: 20
     enable: true
+  - name: ai_chat
+    priority: 9
+    enable: true

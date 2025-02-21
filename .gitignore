@@ -2,6 +2,13 @@
 *.db
 *.ini
 
+# 忽略本地api key文件
+/plugins/ai_chat/config.yaml
+# 忽略本地prompt
+/plugins/ai_chat/prompts/*
+# 仅保留default_prompt
+!/plugins/ai_chat/prompts/default_prompts.txt
+
 # 忽略本地config.yaml配置文件，保留样例(example)文件
 /config.yaml
 
