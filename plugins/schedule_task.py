@@ -39,8 +39,8 @@ async def B站直播检测_task():
         msg = "土豆开播啦！"
         live_flag = '1'
         await ini.写配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', live_flag)
-        for group_id in value.B站直播检测_task_list:
-            await luo9.send_group_message(group_id, msg, ignore=False)
+        for group_id in value.B站直播检测推送列表:
+            await luo9.send_group_message(group_id, msg)
             await asyncio.sleep(1)    # 延迟1秒
     if status == 0 and live_flag == '1':
         live_flag = '0'
@@ -68,7 +68,7 @@ async def 节日检测_task():
         if not is_match:
             msg += f'今天是{festival_today}。'
 
-        for group_id in value.节日检测_task_list:
+        for group_id in value.节日检测推送列表:
             await luo9.send_group_message(group_id, msg)
             await asyncio.sleep(1)    # 延迟1秒
     else:
