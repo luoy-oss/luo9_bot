@@ -56,7 +56,7 @@ value = get_value()
 }
 '''
 
-@Record
+# @Record
 async def message_handle(message_objects):
     if message_objects['message_type'] == 'group':
         message = message_objects['message']

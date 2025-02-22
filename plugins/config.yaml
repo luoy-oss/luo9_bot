@@ -19,3 +19,6 @@ plugins:
   - name: ai_chat
     priority: 9
     enable: true
+  - name: github_card
+    priority: 10
+    enable: true
