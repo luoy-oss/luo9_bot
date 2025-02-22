@@ -151,6 +151,40 @@ async def group_handle(message, group_id, user_id):
 # 其余插件代码
 
 ```
+
+## 计划任务
+
+你可以通过
+
+task中的on_schedule_task装饰器，参考AsyncIOScheduler计划任务规则
+
+进行bot计划任务
+
+```python
+from luo9 import get_task
+
+task = get_task()
+
+config = {
+    'name': 'schedule_task',
+    'describe': '定时任务',
+    'author': 'drluo',
+    'version': '1.0.0',
+    'message_types': ['']
+}
+
+@task.on_schedule_task(trigger ='interval', minutes=1)
+async def task1():
+    print("每分钟调用一次")
+
+@task.on_schedule_task(trigger ='cron', second=0, minute=0, hour=6)
+async def task2():
+    print("每天06:00:00（6时0分0秒）调用一次")
+# 其余插件代码
+
+```
+
+
 # 免责声明
 
 代码仅用于对Python技术的交流学习使用，禁止用于实际生产项目，请勿用于非法用途和商业用途！如因此产生任何法律纠纷，均与作者无关！
