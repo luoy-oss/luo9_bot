@@ -12,7 +12,6 @@ from flask import Flask, request
 from luo9.message import message_handle
 from luo9.notice import notice_handle
 from concurrent.futures import ThreadPoolExecutor
-from plugins.schedule_task import schedule_run
 
 driver = get_driver()
 app = Flask(__name__)
@@ -46,10 +45,15 @@ def signal_handler(sig, frame):
     print('\r\n用户终止')
     exit(0)
 
+from luo9 import get_task
+task = get_task()
+
+async def run_task():
+    await task.start()
+
 if __name__ == '__main__':
     asyncio.run(startup())
+    asyncio.run(run_task())
     signal.signal(signal.SIGINT, signal_handler)
     with ThreadPoolExecutor() as executor:
         executor.submit(run_flask)
-        schedule_run()
-

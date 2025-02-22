@@ -1,37 +1,31 @@
 
 import asyncio
+import requests
+import urllib3
 from luo9.api_manager import luo9
-from plugins import bilibili
 from utils import ini_files as ini
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from config import get_value
 from plugins.achievement.data_value import festival_achievement
 from plugins.festival import FestivalCalendar
+from luo9 import get_task
+from fake_useragent import UserAgent
+urllib3.disable_warnings()
 
+task = get_task()
 value = get_value()
 
-def schedule_run():
-    print("定时任务初始化")
-    scheduler = AsyncIOScheduler()
+config = {
+    'name': 'schedule_task',
+    'describe': '定时任务',
+    'author': 'drluo',
+    'version': '1.0.0',
+    'message_types': ['']
+}
 
-    scheduler.add_job(  
-        B站直播检测_task, 
-        trigger ='interval', minutes=1)
-
-    scheduler.add_job(  
-        节日检测_task, 
-        trigger ='cron', second=0, minute=0, hour=6)
-
-    scheduler.start()
-    try:
-        print("定时任务执行！")
-        asyncio.get_event_loop().run_forever()
-    except(KeyboardInterrupt, SystemExit):
-        pass
-    
+@task.on_schedule_task(trigger ='interval', minutes=1)
 async def B站直播检测_task():
     # status 0：未开播 1：直播中 2：轮播中
-    status = await bilibili.live_check_with_liveid(value.土豆直播间ID)
+    status = await live_check_with_liveid(value.土豆直播间ID)
     live_flag = await ini.读配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', '0')
     if status == 1 and live_flag == '0':
         msg = "土豆开播啦！"
@@ -44,6 +38,40 @@ async def B站直播检测_task():
         live_flag = '0'
         await ini.写配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', live_flag)  
 
+
+async def live_check_with_liveid(live_id):
+    headers = {'User-Agent': UserAgent().random}
+    url = "https://api.live.bilibili.com/room/v1/Room/get_info"
+    params = {
+        'room_id': live_id
+    }
+    response = requests.get(url, params=params,headers=headers, verify=False)
+    live_json = response.json()
+    status = 0
+    if live_json['code'] == 0:
+        # status 0：未开播 1：直播中 2：轮播中
+        status = live_json['data']['live_status']
+
+    return status
+    
+# async def live_check_with_uid(uid):
+#     headers = {'User-Agent': UserAgent().random}
+#     url = "https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld"
+#     params = {
+#         "mid": uid
+#     }
+#     response = requests.get(url, params=params,headers=headers, verify=False)
+    
+#     live_json = response.json()
+#     status = 0
+#     if live_json['code'] == 0:
+#         # status 0：未开播 1：直播中 2：轮播中
+#         status = live_json['data']['liveStatus']
+
+#     return status
+    
+
+@task.on_schedule_task(trigger ='cron', second=0, minute=0, hour=6)
 async def 节日检测_task():
     festival = FestivalCalendar()
     element = festival.getCalendarDetail()

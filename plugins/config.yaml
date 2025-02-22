@@ -5,7 +5,7 @@ plugins:
     priority: 1
     enable: true
   - name: repeat
-    priority: 999
+    priority: 99
     enable: true
   - name: api
     priority: 10
@@ -21,4 +21,7 @@ plugins:
     enable: true
   - name: github_card
     priority: 10
+    enable: true
+  - name: schedule_task
+    priority: 999
     enable: true
