@@ -2,6 +2,7 @@ import importlib
 import os
 import stat
 import yaml
+from config import get_value
 
 def print_flip() -> None:
     print("---------------------------")
@@ -66,7 +67,6 @@ class PluginManager:
             if 'group_poke' in plugin['message_types']:
                 await plugin['module'].group_poke_handle(target_id, user_id, group_id)
 
-from config import get_value
 value = get_value()
 
 plugin_manager = PluginManager(value.plugin_path)

@@ -1,8 +1,4 @@
 #main.py
-from config import load_config, get_value
-load_config('config.yaml')
-value = get_value()
-
 import signal
 import json
 
@@ -10,6 +6,11 @@ from flask import Flask, request
 from luo9 import message_handle, notice_handle
 from concurrent.futures import ThreadPoolExecutor
 from plugins.schedule_task import schedule_run
+from config import load_config, get_value
+
+load_config('config.yaml')
+value = get_value()
+
 
 app = Flask(__name__)
 

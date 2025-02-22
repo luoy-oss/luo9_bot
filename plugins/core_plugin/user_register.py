@@ -1,12 +1,10 @@
-from config import get_value
-value = get_value()
-
 import utils
-from luo9.api_manager import luo9
 import random
-
+from luo9.api_manager import luo9
 from utils import ini_files as ini
 from configparser import ConfigParser
+from config import get_value
+value = get_value()
 
 async def register(group_id, qq, path):
     USER_DATA_PATH = path['USER_DATA_PATH']

@@ -1,7 +1,8 @@
 import importlib
 import os
 import warnings
-
+from config import get_value
+value = get_value()
 
 class APIManager:
     def __init__(self, api_name):
@@ -70,8 +71,6 @@ class APIManager:
 
     
 
-from config import get_value
-value = get_value()
 
 # luo9 =  APIManager(api_name="NapCat")
 if value.napcat:

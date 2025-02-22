@@ -1,3 +1,14 @@
+import utils
+import os
+import stat
+import sqlite3
+from luo9.api_manager import luo9
+from random import choices
+from plugins.festival import FestivalCalendar
+from .data_value import festival_achievement
+from config import get_value
+value = get_value()
+
 config = {
     'name': 'achievement',
     'describe': '成就模块',
@@ -7,24 +18,11 @@ config = {
     'message_types': ['group_message']
 }
 
-from config import get_value
-value = get_value()
-
-import utils
-from luo9.api_manager import luo9
-
-import os
-import stat
-import sqlite3
-from random import choices
-from plugins.festival import FestivalCalendar
-from .data_value import festival_achievement
-
 async def group_handle(message, group_id, user_id):
     path = await utils.data_path_check(group_id, user_id)
     if utils.at_check(message, value.bot_id):
         festival_reward = await festival_match(utils.without_at(message, value.bot_id), group_id, user_id, path)
-        if festival_reward['status'] == True:
+        if festival_reward['status'] is True:
             print(festival_reward['rewards'])
             pass
 

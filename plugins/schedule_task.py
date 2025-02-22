@@ -1,14 +1,14 @@
-from config import get_value
-value = get_value()
 
 import asyncio
 from luo9.api_manager import luo9
-
 from plugins import bilibili
 from utils import ini
-
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from config import get_value
+from plugins.achievement.data_value import festival_achievement
+from plugins.festival import FestivalCalendar
+
+value = get_value()
 
 def schedule_run():
     print("定时任务初始化")
@@ -43,9 +43,6 @@ async def B站直播检测_task():
     if status == 0 and live_flag == '1':
         live_flag = '0'
         await ini.写配置项(f'{value.data_path}/bilibili_live.ini', f'{value.土豆直播间ID}', 'live', live_flag)  
-
-from plugins.achievement.data_value import festival_achievement
-from plugins.festival import FestivalCalendar
 
 async def 节日检测_task():
     festival = FestivalCalendar()

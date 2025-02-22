@@ -1,14 +1,3 @@
-config = {
-    'name': 'ai_chat',
-    'describe': 'AI对话',
-    'author': 'drluo',
-    'version': '1.0.0',
-    'message_types': ['group_message']
-}
-
-from config import get_value
-value = get_value()
-
 import logging
 import threading
 import os
@@ -17,8 +6,17 @@ import asyncio
 import time
 import warnings
 from openai import OpenAI
-
 from luo9.api_manager import luo9
+from config import get_value
+value = get_value()
+
+config = {
+    'name': 'ai_chat',
+    'describe': 'AI对话',
+    'author': 'drluo',
+    'version': '1.0.0',
+    'message_types': ['group_message']
+}
 
 def calculate_delay(message_list):
     delays = []

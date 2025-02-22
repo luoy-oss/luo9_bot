@@ -1,6 +1,1 @@
-from .ini_files import *
-from .check import *
-from .random_run import *
-from .message_limit import *
-from .record import Record
-from .download_img import *
+__all__ = ['ini_files', 'checksys', 'random_runre', 'message_limit', 'record', 'download_img']

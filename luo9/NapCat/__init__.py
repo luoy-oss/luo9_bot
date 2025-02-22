@@ -1,2 +1,1 @@
-from .group import *
-from .user import *
+__all__ = ['group', 'user']

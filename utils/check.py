@@ -1,12 +1,11 @@
-from config import get_value
-value = get_value()
-
 import re
 import sqlite3
 import os
 import stat
 
 from utils import ini_files as ini
+from config import get_value
+value = get_value()
 
 async def data_path_check(group_id, qq):
     

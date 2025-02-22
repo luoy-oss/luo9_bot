@@ -1,10 +1,8 @@
-from config import get_value
-value = get_value()
-
 import sqlite3
 import os
 import stat
-
+from config import get_value
+value = get_value()
 
 def Record(func):
     # __group_message_record__

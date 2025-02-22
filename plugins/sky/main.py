@@ -1,3 +1,10 @@
+import utils
+import requests
+from luo9.api_manager import luo9
+from utils.message_limit import MessageLimit
+from config import get_value
+value = get_value()
+
 config = {
     'name': 'sky',
     'describe': '光遇api，提供红石查询 每日任务查询',
@@ -5,13 +12,6 @@ config = {
     'version': '1.0.0',
     'message_types': ['group_message']
 }
-from config import get_value
-value = get_value()
-
-import utils
-import requests
-from luo9.api_manager import luo9
-from utils.message_limit import MessageLimit
 
 skyhs_limit = MessageLimit('skyhs')
 skyrw_limit = MessageLimit('skyrw')
@@ -55,7 +55,7 @@ async def sky_api(lx):
     text = ''
     if response.status_code == 200:
         response_json = response.json()
-        if response_json['success'] == True:
+        if response_json['success'] is True:
             print("api：光遇红石获取成功")
             text = response_json['data']['content']
         else:

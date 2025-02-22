@@ -1,8 +1,7 @@
-import urllib3
-urllib3.disable_warnings()
-
 import requests
+import urllib3
 from fake_useragent import UserAgent
+urllib3.disable_warnings()
 
 async def live_check_with_liveid(live_id):
     headers = {'User-Agent': UserAgent().random}

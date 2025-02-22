@@ -1,9 +1,6 @@
+from luo9.plugin_manager import plugin_manager
 from config import get_value
 value = get_value()
-
-
-
-from luo9.plugin_manager import plugin_manager
 
 async def poke_handle(target_id, user_id, group_id=''):
     # 群戳一戳

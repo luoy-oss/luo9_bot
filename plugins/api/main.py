@@ -1,3 +1,11 @@
+import requests
+import utils
+import random
+from luo9.api_manager import luo9
+from utils.message_limit import MessageLimit
+from config import get_value
+value = get_value()
+
 config = {
     'name': 'api',
     'describe': '一言 情话 网易云 舔狗日记',
@@ -5,14 +13,6 @@ config = {
     'version': '1.0.0',
     'message_types': ['group_message','group_poke']
 }
-
-from config import get_value
-value = get_value()
-
-import requests
-import utils
-from luo9.api_manager import luo9
-from utils.message_limit import MessageLimit
 
 舔狗日记_limit = MessageLimit('舔狗日记')
 一言_limit = MessageLimit('一言')
@@ -47,7 +47,6 @@ async def group_handle(message, group_id, user_id):
             if api_msg != '':
                 await luo9.send_group_message(group_id, api_msg, ignore=False)  
 
-import random
 async def group_poke_handle(target_id, user_id, group_id):
     # 目标为bot本身
     if target_id == value.bot_id:
@@ -82,7 +81,7 @@ async def 舔狗日记():
     text = ''
     if response.status_code == 200:
         response_json = response.json()
-        if response_json['success'] == True:
+        if response_json['success'] is True:
             print("api：舔狗日记获取成功")
             text = response_json['data']['content']
         else:
@@ -129,7 +128,7 @@ async def 情话():
     情话 = ''
     if response.status_code == 200:
         response_json = response.json()
-        if response_json['success'] == True:
+        if response_json['success'] is True:
             print("api：情话获取成功")
             情话 = response_json['data']['content']
         else:

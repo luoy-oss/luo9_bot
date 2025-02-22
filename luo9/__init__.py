@@ -1,2 +1,2 @@
-from .message import *
-from .notice import *
+__all__ = ['message', 'notice']
+

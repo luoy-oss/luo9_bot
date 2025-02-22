@@ -1,3 +1,7 @@
+from .daily_sign_in import sign_in, query_data, user_info
+from .user_register import register
+import utils
+
 config = {
     'name': 'core_plugin',
     'describe': '签到注册模块',
@@ -5,10 +9,6 @@ config = {
     'version': '1.0.0',
     'message_types': ['group_message']
 }
-
-from .daily_sign_in import sign_in, query_data, user_info
-from .user_register import register
-import utils
 
 async def group_handle(message, group_id, user_id):
     path = await utils.data_path_check(group_id, user_id)

@@ -1,8 +1,6 @@
+import requests
 from config import get_value
 value = get_value()
-
-import requests
-
 
 # 发送群聊消息的函数
 async def send_private_msg(user_id, message):

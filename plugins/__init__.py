@@ -1,1 +1,1 @@
-from .achievement import *
+__all__ =['achievement']

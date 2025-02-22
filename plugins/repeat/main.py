@@ -1,3 +1,8 @@
+import utils
+from luo9.api_manager import luo9
+from config import get_value
+value = get_value()
+
 config = {
     'name': 'repeat',
     'describe': '复读机，对3词重复的内容进行复读',
@@ -5,11 +10,6 @@ config = {
     'version': '1.0.0',
     'message_types': ['group_message']
 }
-from config import get_value
-value = get_value()
-
-import utils
-from luo9.api_manager import luo9
 
 repeate_message = ''
 
