@@ -21,7 +21,7 @@ async def notice_handle(message_objects):
     elif message_objects['notice_type'] == 'group_decrease':
         group_id = message_objects['group_id']
         user_id = message_objects['user_id']
-        sub_type = message_objects['sub_type']
+        # sub_type = message_objects['sub_type']
         # if sub_type == 'leave':
         #     await luo9.send_group_message(group_id, f"成员 [CQ:at,qq={user_id}] 已主动退出群聊。")
         # elif sub_type == 'kick':

@@ -26,7 +26,7 @@ def calculate_delay(message_list):
 
     for i in range(len(message_list) - 1):
         current_message = message_list[i]
-        next_message = message_list[i + 1]
+        message_list[i + 1]
 
         current_message_length = len(current_message)
 

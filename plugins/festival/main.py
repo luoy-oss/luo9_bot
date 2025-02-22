@@ -256,10 +256,10 @@ class FestivalCalendar:
         """将公历日期转换为农历日期"""
 
         # 农历纪元开始日期
-        lunar_epoch = datetime(1900, 1, 31, 0, 0, 0, tzinfo=timezone.utc)
+        # lunar_epoch = datetime(1900, 1, 31, 0, 0, 0, tzinfo=timezone.utc)
 
         # 计算公历日期距离农历纪元的天数
-        days_since_epoch = (gregorian_date - lunar_epoch).days
+        # days_since_epoch = (gregorian_date - lunar_epoch).days
 
         # gregorian_date += timedelta(hours=8)
         date1 = float(gregorian_date.timestamp())

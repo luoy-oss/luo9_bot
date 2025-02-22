@@ -9,6 +9,7 @@ from config import get_value
 value = get_value()
 
 import utils
+import requests
 from luo9.api_manager import luo9
 from utils.message_limit import MessageLimit
 

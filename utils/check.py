@@ -9,7 +9,6 @@ import stat
 from utils import ini_files as ini
 
 async def data_path_check(group_id, qq):
-    main_path = value.data_path
     
     # 群文件夹
     data_path = value.data_path + '/{group_id}/'.format(group_id=group_id)
@@ -92,7 +91,6 @@ async def duplicate_message_check(message, group_id, check_num):
         os.chmod(data_path, stat.S_IRWXO)
         
     data_path = group_path + '/chat_record.db'
-    record_file = data_path
     if os.path.isfile(data_path):
         conn = sqlite3.connect(data_path)
         cursor = conn.cursor()
