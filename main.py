@@ -5,13 +5,16 @@ value = get_value()
 #main.py
 import signal
 import json
+import asyncio
 
+from luo9 import get_driver
 from flask import Flask, request
 from luo9.message import message_handle
 from luo9.notice import notice_handle
 from concurrent.futures import ThreadPoolExecutor
 from plugins.schedule_task import schedule_run
 
+driver = get_driver()
 app = Flask(__name__)
 
 @app.route('/', methods=['POST'])
@@ -32,12 +35,19 @@ async def receive_event():
 def run_flask():
     app.run(host=value.ncc_host, port=value.ncc_port)
 
+async def startup():
+    await driver.run_startup()
+
+async def shutdown():
+    await driver.run_shutdown()
+
 def signal_handler(sig, frame):
+    asyncio.run(shutdown())
     print('\r\n用户终止')
     exit(0)
 
 if __name__ == '__main__':
-
+    asyncio.run(startup())
     signal.signal(signal.SIGINT, signal_handler)
     with ThreadPoolExecutor() as executor:
         executor.submit(run_flask)

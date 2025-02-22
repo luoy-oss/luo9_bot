@@ -9,9 +9,9 @@ class APIManager:
         self.api_name = api_name
         self.group = None
         self.private = None
-        self.load_api()
+        self.__load_api()
 
-    def load_api(self):
+    def __load_api(self):
         api_path = os.path.join('./luo9', self.api_name)
         
         if os.path.isdir(api_path):

@@ -31,16 +31,21 @@ _✨ 推荐使用python 3.10.12 ✨_
 git clone https://github.com/luoy-oss/luo9_bot.git
 ```
 
+<br>
+
 > 进入bot主目录
 ```
 cd luo9_bot
 ```
+
+<br>
 
 > 安装依赖
 ```
 pip install -r requiremes.txt
 ```
 
+<br>
 
 > 运行
 >
@@ -49,11 +54,15 @@ pip install -r requiremes.txt
 python3 main.py
 ```
 
+<br>
+
 ## 基础配置
 
 > 参考config.(example).yaml
 > 
 > 在同级目录下添加文件：config.yaml进行配置
+
+<br>
 
 ## 插件编写
 
@@ -75,14 +84,16 @@ python3 main.py
     enable: false
 ```
 
+<br>
+
 > main.py 必须含有：
 ```python
 # 插件信息
 config = {
-    'name': 'core_plugin',
-    'describe': '签到注册模块',
-    'author': 'drluo',
-    'version': '1.0.0',
+    'name': 'plugin_name',
+    'describe': '插件描述',
+    'author': '插件作者',
+    'version': '插件版本',
     'message_types': ['group_message', 'private_message', 'group_poke']
 }
 
@@ -111,7 +122,35 @@ value = get_value()
 
 ```
 
+<br>
 
+## 启动前后处理
+
+你可以通过
+
+driver中的on_startup与on_shutdown装饰器
+
+进行bot启动前/停止前插件的信息处理
+
+```python
+from luo9 import get_driver
+
+driver = get_driver()
+
+@driver.on_startup
+async def _():
+    print("插件启动前处理")
+
+
+@driver.on_shutdown
+async def _():
+    print("插件停止前处理")
+
+async def group_handle(message, group_id, user_id):
+    pass
+# 其余插件代码
+
+```
 # 免责声明
 
 代码仅用于对Python技术的交流学习使用，禁止用于实际生产项目，请勿用于非法用途和商业用途！如因此产生任何法律纠纷，均与作者无关！

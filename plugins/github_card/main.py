@@ -1,5 +1,4 @@
 import re
-import requests
 from luo9.api_manager import luo9
 import utils.download_img as uimg
 from utils.message_limit import MessageLimit
@@ -31,12 +30,8 @@ async def group_handle(message, group_id, user_id):
 async def get_github_reposity_information(url: str) -> str:
     # image_url = f"https://github.html.zone/{UserName}/{RepoName}"
 
-    try:
-        UserName, RepoName = url.replace("github.com/", "").split("/")
-        image_url = f"https://opengraph.githubassets.com/githubcard/{UserName}/{RepoName}"
-    except:
-        UserName, RepoName = 'none', 'none'        
-        image_url = f"https://opengraph.githubassets.com/githubcard/"
+    UserName, RepoName = url.replace("github.com/", "").split("/")
+    image_url = f"https://opengraph.githubassets.com/githubcard/{UserName}/{RepoName}"
 
     return {'image_url': image_url, 'user_name': UserName, 'repo_name': RepoName}
 
