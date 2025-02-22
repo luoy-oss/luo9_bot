@@ -1,7 +1,6 @@
 from config import get_value
 value = get_value()
 
-from flask import Flask, request
 import requests
 
 

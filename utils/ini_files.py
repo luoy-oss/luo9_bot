@@ -1,5 +1,6 @@
 from configparser import ConfigParser
-import os, stat
+import os
+import stat
 
 async def 读配置项(file, 节名称, 配置项名称, 默认值=""):
     if not os.path.isfile(file):

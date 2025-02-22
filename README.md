@@ -1,6 +1,28 @@
+<div align="center">
+
 # 洛玖机器人
 
-> 推荐使用py3.10.12
+_✨ 推荐使用python 3.10.12 ✨_
+
+<a href="https://raw.githubusercontent.com/luoy-oss/luo9_bot/main/LICENSE">
+    <img src="https://img.shields.io/github/license/luoy-oss/luo9_bot" alt="license">
+</a>
+<!-- <a href="https://pypi.python.org/pypi/packageName">
+    <img src="https://img.shields.io/pypi/v/packageName?logo=python&logoColor=edb641" alt="pypi">
+</a> -->
+<img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=edb641" alt="python">
+<a href="https://github.com/astral-sh/ruff">
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json" alt="ruff">
+</a>
+<br />
+
+<!-- <a href="https://github.com/luoy-oss/luo9_bot/actions/workflows/ruff.yml">
+    <img src="https://github.com/luoy-oss/luo9_bot/actions/workflows/ruff.yml/badge.svg?branch=main&event=push" alt="ruff">
+</a> -->
+
+<br />
+
+</div>
 
 ## 运行
 

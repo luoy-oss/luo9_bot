@@ -10,7 +10,6 @@ value = get_value()
 
 import utils
 from luo9.api_manager import luo9
-import urllib.request
 from utils.message_limit import MessageLimit
 
 skyhs_limit = MessageLimit('skyhs')

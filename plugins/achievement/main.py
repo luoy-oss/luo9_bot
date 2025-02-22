@@ -13,7 +13,8 @@ value = get_value()
 import utils
 from luo9.api_manager import luo9
 
-import os, stat
+import os
+import stat
 import sqlite3
 from random import choices
 from plugins.festival import FestivalCalendar

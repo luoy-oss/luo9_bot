@@ -1,10 +1,7 @@
 from config import get_value
 value = get_value()
 
-import utils
-import plugins
 
-from utils.record import Record
 
 from luo9.plugin_manager import plugin_manager
 

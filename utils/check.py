@@ -3,7 +3,8 @@ value = get_value()
 
 import re
 import sqlite3
-import os, stat
+import os
+import stat
 
 from utils import ini_files as ini
 
@@ -24,7 +25,7 @@ async def data_path_check(group_id, qq):
         os.makedirs(data_path)
         os.chmod(data_path, stat.S_IRWXO)
     
-    USER_DATA_PATH = user_path + '/{qq}.ini'.format(group_id=group_id,qq=qq)
+    USER_DATA_PATH = user_path + '/{qq}.ini'.format(qq=qq)
 
     # 管理文件夹
     data_path = group_path + '/Admin/'

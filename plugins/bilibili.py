@@ -6,7 +6,7 @@ from fake_useragent import UserAgent
 
 async def live_check_with_liveid(live_id):
     headers = {'User-Agent': UserAgent().random}
-    url = f"https://api.live.bilibili.com/room/v1/Room/get_info"
+    url = "https://api.live.bilibili.com/room/v1/Room/get_info"
     params = {
         'room_id': live_id
     }
@@ -22,7 +22,7 @@ async def live_check_with_liveid(live_id):
 
 async def live_check_with_uid(uid):
     headers = {'User-Agent': UserAgent().random}
-    url = f"https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld"
+    url = "https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld"
     params = {
         "mid": uid
     }

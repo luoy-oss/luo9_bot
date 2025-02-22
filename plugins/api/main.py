@@ -26,7 +26,7 @@ async def group_handle(message, group_id, user_id):
         if 舔狗日记_limit.check(2) and utils.without_at(message, value.bot_id) == '舔狗日记':
             舔狗日记_limit.handle()
             api_msg = await 舔狗日记()
-            if not "妈的" in api_msg and not "你妈" in api_msg and not "他妈" in api_msg and not "去死" in api_msg and not "TT" in api_msg:
+            if "妈的" not in api_msg and "你妈" not in api_msg and "他妈" not in api_msg and "去死" not in api_msg and "TT" not in api_msg:
                 await luo9.send_group_message(group_id, api_msg, ignore=False)
             else:
                 print("舔狗日记：不文明用语屏蔽")
@@ -72,7 +72,7 @@ async def group_poke_handle(target_id, user_id, group_id):
 
 
 async def 舔狗日记():
-    url = f"https://api.vvhan.com/api/text/dog"
+    url = "https://api.vvhan.com/api/text/dog"
     params = {
         'type': 'json'
     }
@@ -93,7 +93,7 @@ async def 舔狗日记():
     return text
 
 async def 一言():
-    url = f"https://v1.hitokoto.cn"
+    url = "https://v1.hitokoto.cn"
     params = {
         'c': 'b'
     }
@@ -119,7 +119,7 @@ async def 一言():
     return 一言
 
 async def 情话():
-    url = f"https://api.vvhan.com/api/text/love"
+    url = "https://api.vvhan.com/api/text/love"
     params = {
         'type': 'json'
     }
@@ -140,7 +140,7 @@ async def 情话():
     return 情话
 
 async def 一言_网易云():
-    url = f"https://v1.hitokoto.cn"
+    url = "https://v1.hitokoto.cn"
     params = {
         'c': 'j'
     }

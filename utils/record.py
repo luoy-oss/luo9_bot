@@ -2,7 +2,8 @@ from config import get_value
 value = get_value()
 
 import sqlite3
-import os, stat
+import os
+import stat
 
 
 def Record(func):

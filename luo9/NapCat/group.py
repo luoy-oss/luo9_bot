@@ -2,7 +2,6 @@ from config import get_value
 value = get_value()
 
 import requests
-from flask import Flask, request
 
 async def send_group_message(group_id, message):
     url = f"{value.base_url}/send_group_msg"

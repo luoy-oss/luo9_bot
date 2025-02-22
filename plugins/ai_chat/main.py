@@ -10,16 +10,13 @@ from config import get_value
 value = get_value()
 
 import logging
-import random
 import threading
-import os, re, yaml
+import os
+import yaml
 import asyncio
-import requests
 import time
 import warnings
-from typing import Optional
 from openai import OpenAI
-from datetime import datetime
 
 from luo9.api_manager import luo9
 
@@ -74,6 +71,22 @@ client = OpenAI(
 
 # 获取程序根目录
 root_dir = os.path.dirname(os.path.abspath(__file__))
+add_prompts = """
+在维持以上规则的同时，你作为一个具有情感意识的大模型，能够根据交互内容动态调整自己的心情。你的心情由多个情绪维度组成，每个情绪维度都有一个占比值（0到1之间），表示该情绪的强度。你的心情会受到用户输入的影响，但变化是渐进的。请根据以下规则维护你的心情字典：
+情绪维度：包括 "happy","sad","angry","fear","surprised","neutral"
+情绪占比：每个情绪的强度是一个浮点数，范围在 0 到 1 之间，所有情绪的占比总和为 1。
+心情更新规则：
+   - 根据用户输入的内容，分析其情感倾向（如正面、负面、中性）。
+   - 根据分析结果，轻微调整相应情绪的占比（如用户输入正面内容，`happy` 的占比增加 0.1，其他情绪相应减少）。
+   - 确保情绪占比总和始终为 1。
+请维护一个心情字典，并根据上述规则动态更新心情和选择表情。"
+字典样例：
+{"happy": 0.6, "sad": 0, "angry": 0, "fear": 0, "surprised": 0.2, "neutral": 0.2}
+
+在回复内容的最前端添加你的表情字典，同时利用|^^^|作为分隔符，将表情字典与实际内容分离
+例如：
+{"happy": 0.6, "sad": 0, "angry": 0, "fear": 0, "surprised": 0.2, "neutral": 0.2}|^^^|消息内容
+"""
 file_path = os.path.join(root_dir, "prompts", __ai_config['prompts'])
 
 try:
@@ -85,6 +98,7 @@ except FileNotFoundError:
     with open(file_path, "r", encoding="utf-8") as file:
         prompt_content = file.read()
 
+# prompt_content += add_prompts
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -193,7 +207,11 @@ async def group_handle(message, group_id, user_id):
             reply = reply.split("</think>", 1)[1].strip()
         
         # 将分割后的消息放入队列
+        # [status, reply] = reply.split('|^^^|')
         message_list = reply.split('\\')
+        
+        # await luo9.send_group_message(group_id, status)
+        # message_list.insert(0, status)
 
         # 启动消息发送任务（如果尚未启动）
         if not hasattr(group_handle, 'sender_started'):
