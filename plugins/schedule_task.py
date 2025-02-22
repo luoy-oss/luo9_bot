@@ -2,7 +2,7 @@
 import asyncio
 from luo9.api_manager import luo9
 from plugins import bilibili
-from utils import ini
+from utils import ini_files as ini
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from config import get_value
 from plugins.achievement.data_value import festival_achievement

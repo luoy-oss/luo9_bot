@@ -1,6 +1,6 @@
 import requests
-import utils
 import random
+import utils.check as check
 from luo9.api_manager import luo9
 from utils.message_limit import MessageLimit
 from config import get_value
@@ -19,29 +19,29 @@ config = {
 情话_limit = MessageLimit('情话')
 一言_网易云_limit = MessageLimit('一言_网易云')
 async def group_handle(message, group_id, user_id):
-    if utils.at_check(message, value.bot_id):
+    if check.at_check(message, value.bot_id):
         global 舔狗日记_limit
         global 一言_limit
         global 情话_limit
-        if 舔狗日记_limit.check(2) and utils.without_at(message, value.bot_id) == '舔狗日记':
+        if 舔狗日记_limit.check(2) and check.without_at(message, value.bot_id) == '舔狗日记':
             舔狗日记_limit.handle()
             api_msg = await 舔狗日记()
             if "妈的" not in api_msg and "你妈" not in api_msg and "他妈" not in api_msg and "去死" not in api_msg and "TT" not in api_msg:
                 await luo9.send_group_message(group_id, api_msg, ignore=False)
             else:
                 print("舔狗日记：不文明用语屏蔽")
-        if 一言_limit.check(2) and utils.without_at(message, value.bot_id) == '一言':
+        if 一言_limit.check(2) and check.without_at(message, value.bot_id) == '一言':
             一言_limit.handle()
             api_msg = await 一言()
             if api_msg != {}:
                 message = '{一言_content}    ——来自《{一言_from}》'.format(一言_content=api_msg['content'], 一言_from=api_msg['from'])
                 await luo9.send_group_message(group_id, message, ignore=False)
-        if 情话_limit.check(2) and utils.without_at(message, value.bot_id) == '情话':
+        if 情话_limit.check(2) and check.without_at(message, value.bot_id) == '情话':
             情话_limit.handle()
             api_msg = await 情话()
             if api_msg != '':
                 await luo9.send_group_message(group_id, api_msg, ignore=False)  
-        if 一言_网易云_limit.check(2) and utils.without_at(message, value.bot_id) == '网易云':
+        if 一言_网易云_limit.check(2) and check.without_at(message, value.bot_id) == '网易云':
             一言_网易云_limit.handle()
             api_msg = await 一言_网易云()
             if api_msg != '':

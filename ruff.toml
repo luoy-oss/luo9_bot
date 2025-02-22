@@ -30,7 +30,8 @@ exclude = [
     "*.yaml",   # 忽略yaml配置文件
     "*.log",    # 忽略log文件
     "*.ini",    # 忽略ini文件
-    "plugins/festival/*"
+    "plugins/festival/*",
+    "./main.py"
 ]
 
 # 与 Black 保持一致

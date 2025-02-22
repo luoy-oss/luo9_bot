@@ -58,12 +58,14 @@ class Value:
 config = {}
 
 def load_config(file_path='config.yaml'):
+    print('load_config')
     if not os.path.exists(file_path):
         print("请检查config.(example).yaml同级目录下的配置文件", file_path, "是否创建")
         exit(0)
     global config
     with open(file_path, 'r', encoding='utf-8') as file:
         config = yaml.safe_load(file)
+    print(config)
 
 
 def get_config():

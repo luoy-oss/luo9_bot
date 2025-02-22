@@ -1,6 +1,6 @@
 from .daily_sign_in import sign_in, query_data, user_info
 from .user_register import register
-import utils
+import utils.check as check
 
 config = {
     'name': 'core_plugin',
@@ -11,7 +11,7 @@ config = {
 }
 
 async def group_handle(message, group_id, user_id):
-    path = await utils.data_path_check(group_id, user_id)
+    path = await check.data_path_check(group_id, user_id)
     if message == "签到" or message == "打卡":
         await sign_in(group_id, user_id, path)
     elif message == "查询":

@@ -1,7 +1,7 @@
-import utils
 import os
 import stat
 import sqlite3
+import utils.check as check
 from luo9.api_manager import luo9
 from random import choices
 from plugins.festival import FestivalCalendar
@@ -19,9 +19,9 @@ config = {
 }
 
 async def group_handle(message, group_id, user_id):
-    path = await utils.data_path_check(group_id, user_id)
-    if utils.at_check(message, value.bot_id):
-        festival_reward = await festival_match(utils.without_at(message, value.bot_id), group_id, user_id, path)
+    path = await check.data_path_check(group_id, user_id)
+    if check.at_check(message, value.bot_id):
+        festival_reward = await festival_match(check.without_at(message, value.bot_id), group_id, user_id, path)
         if festival_reward['status'] is True:
             print(festival_reward['rewards'])
             pass
@@ -33,9 +33,9 @@ async def group_handle(message, group_id, user_id):
 async def get_achievement(group_id, qq, path):
     USER_DATA_PATH = path['USER_DATA_PATH']
 
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
-        if await utils.register_check(group_id, qq, USER_DATA_PATH):
+        if await check.register_check(group_id, qq, USER_DATA_PATH):
             msg += '———成就列表———\n'
 
             data_path = value.data_path + '/Achievement/'
@@ -87,7 +87,7 @@ async def get_achievement(group_id, qq, path):
 
 async def festival_match(message, group_id, qq, path):
     festival = FestivalCalendar()
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
         element = festival.getCalendarDetail()
         if element['阳历节日'] != '' or element['农历节日'] != '':

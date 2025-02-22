@@ -1,5 +1,5 @@
-import utils
 import requests
+import utils.download_img as uimg
 from luo9.api_manager import luo9
 from utils.message_limit import MessageLimit
 from config import get_value
@@ -24,21 +24,21 @@ async def group_handle(message, group_id, user_id):
         skyhs_limit.handle()
         img_url = 'https://api.zxz.ee/api/sky/?type=&lx=hs'
         save_path = f"{value.data_path}/plugins/{config['name']}/hs.jpg"
-        await utils.download_image_if_needed(message, img_url, save_path)
+        await uimg.download_image_if_needed(message, img_url, save_path)
         await luo9.send_group_image(group_id, save_path)
 
     if skyrw_limit.check(30) and (message == "sky每日任务" or message == "sky每日" or message == "sky任务"):
         skyrw_limit.handle()
         img_url = 'https://api.zxz.ee/api/sky/?type=&lx=rw'
         save_path = f"{value.data_path}/plugins/{config['name']}/rw.jpg"
-        await utils.download_image_if_needed(message, img_url, save_path)
+        await uimg.download_image_if_needed(message, img_url, save_path)
         await luo9.send_group_image(group_id, save_path)
 
     if skyjl_limit.check(30) and (message == "sky季节蜡烛" or message == "sky季蜡"):
         skyjl_limit.handle()
         img_url = 'https://api.zxz.ee/api/sky/?type=&lx=jl'
         save_path = f"{value.data_path}/plugins/{config['name']}/jl.jpg"
-        await utils.download_image_if_needed(message, img_url, save_path)
+        await uimg.download_image_if_needed(message, img_url, save_path)
         await luo9.send_group_image(group_id, save_path)
 
         # 任务_list = sky_api('rw')

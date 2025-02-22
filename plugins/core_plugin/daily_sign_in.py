@@ -1,8 +1,8 @@
-import utils
 import random
 import datetime
+import utils.ini_files as ini
+import utils.check as check
 from luo9.api_manager import luo9
-from utils import ini_files as ini
 from config import get_value
 value = get_value()
 
@@ -13,10 +13,10 @@ async def sign_in(group_id, qq, path):
     point = 0
     total_point = 0
     sign_in_count = 0
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
-        if not await utils.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
-            if await utils.register_check(group_id, qq, USER_DATA_PATH):
+        if not await check.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
+            if await check.register_check(group_id, qq, USER_DATA_PATH):
                 if not await sign_in_today(group_id, qq, USER_DATA_PATH):
                     point = random.randint(1, 10)
                     date = datetime.datetime.now().strftime('%Y年%m月%d日')
@@ -59,10 +59,10 @@ async def query_data(group_id, qq, path):
     USER_DATA_PATH = path['USER_DATA_PATH']
     ADMIN_FROZEN_PATH = path['ADMIN_FROZEN_PATH']
 
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
-        if not await utils.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
-            if await utils.register_check(group_id, qq, USER_DATA_PATH):
+        if not await check.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
+            if await check.register_check(group_id, qq, USER_DATA_PATH):
                 total_point = int(await ini.读配置项(USER_DATA_PATH, "签到", "总积分"))
                 sign_in_count = int(await ini.读配置项(USER_DATA_PATH, "签到", "签到次数"))
                 sign_in_date = await ini.读配置项(USER_DATA_PATH, "签到", "签到时间")
@@ -84,10 +84,10 @@ async def user_info(group_id, qq, path):
     USER_DATA_PATH = path['USER_DATA_PATH']
     ADMIN_FROZEN_PATH = path['ADMIN_FROZEN_PATH']
 
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
-        if not await utils.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
-            if await utils.register_check(group_id, qq, USER_DATA_PATH):
+        if not await check.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
+            if await check.register_check(group_id, qq, USER_DATA_PATH):
                 好感 = int(await ini.读配置项(USER_DATA_PATH, "个人信息", "好感"))
                 IV = int(await ini.读配置项(USER_DATA_PATH, "个人信息", "IV"))
                 IV最大值 = int(await ini.读配置项(USER_DATA_PATH, "数据最值", "IV最大值"))

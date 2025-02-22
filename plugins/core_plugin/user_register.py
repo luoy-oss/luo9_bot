@@ -1,5 +1,5 @@
-import utils
 import random
+import utils.check as check
 from luo9.api_manager import luo9
 from utils import ini_files as ini
 from configparser import ConfigParser
@@ -11,10 +11,10 @@ async def register(group_id, qq, path):
     ADMIN_PRIORITY_PATH = path['ADMIN_PRIORITY_PATH']
     ADMIN_FROZEN_PATH = path['ADMIN_FROZEN_PATH']
 
-    if await utils.interactiveState_check():
+    if await check.interactiveState_check():
         msg = '[CQ:at,qq={qq}]\n'.format(qq=qq)
-        if not await utils.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
-            if not await utils.register_check(group_id, qq, USER_DATA_PATH):
+        if not await check.frozen_check(group_id, qq, ADMIN_FROZEN_PATH):
+            if not await check.register_check(group_id, qq, USER_DATA_PATH):
                 config = ConfigParser()
                 config["注册"] = {
                     "是否注册": "是"
