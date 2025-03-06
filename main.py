@@ -32,7 +32,8 @@ async def receive_event():
     return json.dumps({"OK": 200})
 
 def run_flask():
-    app.run(host=value.ncc_host, port=value.ncc_port)
+    from waitress import serve
+    serve(app, host=value.ncc_host, port=value.ncc_port)
 
 async def startup():
     await driver.run_startup()
