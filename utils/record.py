@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import stat
+import platform
 from config import get_value
 value = get_value()
 
@@ -18,7 +19,8 @@ def Record(func):
             group_path = data_path
             if not os.path.exists(data_path):
                 os.makedirs(data_path)
-                os.chmod(data_path, stat.S_IRWXO)
+                if platform.system() != 'Windows':
+                    os.chmod(data_path, stat.S_IRWXO)
                 
             data_path = group_path + '/chat_record.db'
             record_file = data_path

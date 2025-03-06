@@ -2,6 +2,7 @@ import re
 import sqlite3
 import os
 import stat
+import platform
 
 from utils import ini_files as ini
 from config import get_value
@@ -14,14 +15,16 @@ async def data_path_check(group_id, qq):
     group_path = data_path
     if not os.path.exists(data_path):
         os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXO)
+        if platform.system() != 'Windows':
+            os.chmod(data_path, stat.S_IRWXO)
 
     # 用户数据文件夹
     data_path = group_path + '/User/'
     user_path = data_path 
     if not os.path.exists(data_path):
         os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXO)
+        if platform.system() != 'Windows':
+            os.chmod(data_path, stat.S_IRWXO)
     
     USER_DATA_PATH = user_path + '/{qq}.ini'.format(qq=qq)
 
@@ -30,13 +33,15 @@ async def data_path_check(group_id, qq):
     admin_path = data_path
     if not os.path.exists(data_path):
         os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXO)
+        if platform.system() != 'Windows':
+            os.chmod(data_path, stat.S_IRWXO)
 
     data_path = admin_path + '/priority/'
     admin_priority_path = data_path
     if not os.path.exists(data_path):
         os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXO)
+        if platform.system() != 'Windows':
+            os.chmod(data_path, stat.S_IRWXO)
     
     ADMIN_PRIORITY_PATH = admin_priority_path + "/admin_authority.ini"
     ADMIN_FROZEN_PATH = admin_path + "/frozen.ini"
@@ -87,7 +92,8 @@ async def duplicate_message_check(message, group_id, check_num):
     group_path = data_path
     if not os.path.exists(data_path):
         os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXO)
+        if platform.system() != 'Windows':
+            os.chmod(data_path, stat.S_IRWXO)
         
     data_path = group_path + '/chat_record.db'
     if os.path.isfile(data_path):

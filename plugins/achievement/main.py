@@ -1,6 +1,7 @@
 import os
 import stat
 import sqlite3
+import platform
 import utils.check as check
 from luo9.api_manager import luo9
 from random import choices
@@ -42,7 +43,8 @@ async def get_achievement(group_id, qq, path):
             achieve_path = data_path
             if not os.path.exists(data_path):
                 os.makedirs(data_path)
-                os.chmod(data_path, stat.S_IRWXO)
+                if platform.system() != 'Windows':
+                    os.chmod(data_path, stat.S_IRWXO)
                 
             data_path = achieve_path + '/achievements.db'
             record_file = data_path

@@ -2,6 +2,7 @@ import importlib
 import os
 import stat
 import yaml
+import platform
 from config import get_value
 
 def print_flip() -> None:
@@ -44,7 +45,8 @@ class PluginManager:
                     print(plugin_data_path)
                     if not os.path.exists(plugin_data_path):
                         os.makedirs(plugin_data_path)
-                        os.chmod(plugin_data_path, stat.S_IRWXO)
+                        if platform.system() != 'Windows':
+                            os.chmod(plugin_data_path, stat.S_IRWXO)
                     print(f"加载插件：{plugin['name']}\n作者：{plugin['author']}\n插件描述：{plugin['describe']}\n插件版本：{plugin['version']}\n插件需求：{plugin_module.config['message_types']}")
                     print_flip()
                     load_num = load_num + 1
