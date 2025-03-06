@@ -220,13 +220,13 @@ async def message_reply(message, group_id, user_id):
 
 async def call_back():
     global message_package
-    await message_reply(message_package['message'], message_package['group_id'], message_package['user_id'])
-    print("超时回调：", message_package)
+    message, group_id, user_id = message_package['message'], message_package['group_id'], message_package['user_id']
     message_package = {
         "message": "",
         "group_id": "",
         "user_id": ""
     }
+    await message_reply(message, group_id, user_id)
 
 # @TODO(luoy-oss) 可能存在多用户影响定时器的问题，请后续更新完善
 # 10秒内未获得新输入，进行回复
@@ -236,7 +236,6 @@ async def active_message(message, group_id, user_id):
     message_package['message'] += f"{message}\n"
     message_package['group_id'] = str(group_id)
     message_package['user_id'] = str(user_id)
-    print(message_package)
 
 async def group_handle(message, group_id, user_id):
     if message == "开启对话":
