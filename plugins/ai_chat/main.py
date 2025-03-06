@@ -7,6 +7,7 @@ import time
 import warnings
 from openai import OpenAI
 from luo9.api_manager import luo9
+from luo9.timeout import Timeout
 from config import get_value
 value = get_value()
 
@@ -190,6 +191,53 @@ async def restart_conversation(group_id, user_id):
             del chat_contexts[user_id]
         return await luo9.send_group_message(group_id, __ai_config['messages']['restart_conversation']['success'])
 
+
+message_package = {
+    "message": "",
+    "group_id": "",
+    "user_id": ""
+}
+async def message_reply(message, group_id, user_id):
+    reply = get_deepseek_response(message, user_id)
+    if "</think>" in reply:
+        reply = reply.split("</think>", 1)[1].strip()
+
+    # 将分割后的消息放入队列
+    # [status, reply] = reply.split('|^^^|')
+    message_list = reply.split('\\')
+
+    # await luo9.send_group_message(group_id, status)
+    # message_list.insert(0, status)
+
+    # 启动消息发送任务（如果尚未启动）
+    if not hasattr(group_handle, 'sender_started'):
+        group_handle.sender_started = False
+    if not group_handle.sender_started:
+        await start_message_sender(group_id, message_list)
+        group_handle.sender_started = True
+    else:
+        print(f"消息发送任务已经启动{group_handle.sender_started}")
+
+async def call_back():
+    global message_package
+    await message_reply(message_package['message'], message_package['group_id'], message_package['user_id'])
+    print("超时回调：", message_package)
+    message_package = {
+        "message": "",
+        "group_id": "",
+        "user_id": ""
+    }
+
+# @TODO(luoy-oss) 可能存在多用户影响定时器的问题，请后续更新完善
+# 10秒内未获得新输入，进行回复
+@Timeout(wait=10, on_timeout=call_back)
+async def active_message(message, group_id, user_id):
+    global message_package
+    message_package['message'] += f"{message}\n"
+    message_package['group_id'] = str(group_id)
+    message_package['user_id'] = str(user_id)
+    print(message_package)
+
 async def group_handle(message, group_id, user_id):
     if message == "开启对话":
         return await start_conversation(group_id, user_id)
@@ -200,27 +248,7 @@ async def group_handle(message, group_id, user_id):
     elif message == "重启对话":
         return await restart_conversation(group_id, user_id)
     elif user_id in active_conversations:
-        # TODO(luoy-oss): 对用户一段时间内的信息进行合并后回复
-
-        reply = get_deepseek_response(message, user_id)
-        if "</think>" in reply:
-            reply = reply.split("</think>", 1)[1].strip()
-        
-        # 将分割后的消息放入队列
-        # [status, reply] = reply.split('|^^^|')
-        message_list = reply.split('\\')
-        
-        # await luo9.send_group_message(group_id, status)
-        # message_list.insert(0, status)
-
-        # 启动消息发送任务（如果尚未启动）
-        if not hasattr(group_handle, 'sender_started'):
-            group_handle.sender_started = False
-        if not group_handle.sender_started:
-            await start_message_sender(group_id, message_list)
-            group_handle.sender_started = True
-        else:
-            print(f"消息发送任务已经启动{group_handle.sender_started}")
+        await active_message(message, group_id, user_id)
     else:
         return "对话未开启，请输入'开启对话'以开始聊天。"
 
