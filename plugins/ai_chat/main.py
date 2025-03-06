@@ -29,6 +29,8 @@ def calculate_delay(message_list):
         current_message_length = len(current_message)
 
         delay = current_message_length / typing_speed
+        if delay > 4:
+            delay = 4.0
         delays.append(delay)
 
     return delays

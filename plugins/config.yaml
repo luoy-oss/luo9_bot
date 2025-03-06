@@ -6,7 +6,7 @@ plugins:
     enable: true
   - name: repeat
     priority: 99
-    enable: true
+    enable: false
   - name: api
     priority: 10
     enable: true

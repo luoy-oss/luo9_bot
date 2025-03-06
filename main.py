@@ -53,7 +53,8 @@ async def run_task():
 
 if __name__ == '__main__':
     asyncio.run(startup())
-    asyncio.run(run_task())
+    # asyncio.run(run_task())
     signal.signal(signal.SIGINT, signal_handler)
     with ThreadPoolExecutor() as executor:
         executor.submit(run_flask)
+        asyncio.run(run_task())
