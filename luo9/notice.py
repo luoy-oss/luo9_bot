@@ -27,11 +27,11 @@ async def notice_handle(message_objects):
     elif message_objects['notice_type'] == 'notify':
         # 戳一戳(需要PacketServer才能进行回复)
         if message_objects['sub_type'] == 'poke':
-            group_id = message_objects['group_id']
             target_id = message_objects['target_id']
             user_id = message_objects['user_id']
             if 'group_id' in message_objects:
-                await poke_handle(target_id, user_id, group_id)            
+                group_id = message_objects['group_id']
+                await poke_handle(target_id, user_id, group_id)
             else:
                 await poke_handle(target_id, user_id)
 

@@ -6,7 +6,8 @@ class Task:
     def __init__(self):
         self._scheduler = AsyncIOScheduler()
         self._tasks: List[Dict] = []
-
+        self._job_mapping: Dict[Callable, str] = {}
+        
     def on_schedule_task(self, trigger: str, **kwargs):
         def decorator(func: Callable[[], Coroutine[Any, Any, None]]):
             print(f"定时任务创建：{func.__name__}\t{trigger}\t{kwargs}")
@@ -20,17 +21,30 @@ class Task:
 
     async def start(self):
         for task in self._tasks:
-            self._scheduler.add_job(
+            job = self._scheduler.add_job(
                 task['func'],
                 trigger=task['trigger'],
                 **task['kwargs']
             )
+            self._job_mapping[task['func']] = job.id
+
         self._scheduler.start()
         try:
-            print(self._tasks)
-            print("定时任务执行！")
-            await asyncio.Event().wait()  # 等待事件，防止协程退出
+            await asyncio.Event().wait()
         except (KeyboardInterrupt, SystemExit):
             self._scheduler.shutdown()
+
+    def adjust_interval(self, func: Callable, trigger: str, **kwargs):
+        """动态调整任务间隔"""
+        if func not in self._job_mapping:
+            raise ValueError("任务未注册")
+        
+        job_id = self._job_mapping[func]
+        self._scheduler.reschedule_job(
+            job_id,
+            trigger=trigger,
+            **kwargs
+        )
+        print(f"已调整 {func.__name__} 新定时任务 {trigger} : {kwargs}")
 
 task = Task()

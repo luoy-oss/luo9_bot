@@ -1,0 +1,23 @@
+# 告警推送到群聊, 为空则不推送
+group_list: [111111111]
+
+# 告警推送到个人, 为空则不推送
+private_list: []
+
+threshold:
+  cpu: 90
+  memory: 90
+  disk_write: 200
+  disk_read: 200
+
+alert_message:
+  cpu: "CPU使用率过高"
+  memory: "内存占用率过高"
+  disk_write: "磁盘写入速率过高"
+  disk_read: "磁盘读取速率过高"
+
+ok_message:
+  cpu: "CPU使用率恢复正常"
+  memory: "内存占用率恢复正常"
+  disk_write: "磁盘写入速率恢复正常"
+  disk_read: "磁盘读取速率恢复正常"
