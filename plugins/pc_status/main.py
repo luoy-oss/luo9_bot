@@ -99,8 +99,12 @@ async def pc_status_task():
     elif ok_msg:
         msg = f"已就绪:{ok_msg}"
     if msg:
-        # print(msg)
-        await message_push(msg)
+        if __pc_config['group_list']:
+            for group_id in __pc_config['group_list']:
+                await luo9.send_group_message(group_id, msg)
+        if __pc_config['private_list']:
+            for user_id in __pc_config['private_list']:
+                await luo9.send_private_msg(user_id, msg)
     
 pc_status_limit = MessageLimit("pc_status_limit")
 async def group_handle(message, group_id, user_id):
@@ -116,11 +120,3 @@ async def group_handle(message, group_id, user_id):
 
         await luo9.send_group_message(group_id, msg)
     pass
-
-async def message_push(msg):
-    if __pc_config['group_list']:
-        for group_id in __pc_config['group_list']:
-            await luo9.send_group_message(group_id, msg)
-    if __pc_config['private_list']:
-        for user_id in __pc_config['private_list']:
-            await luo9.send_private_msg(user_id, msg)

@@ -158,6 +158,8 @@ async def group_handle(message, group_id, user_id):
 
 task中的on_schedule_task装饰器，参考AsyncIOScheduler计划任务规则
 
+你可以使用task中的adjust_interval装饰器，调整计划任务的定时时间，参数参考AsyncIOScheduler计划任务规则
+
 进行bot计划任务
 
 ```python
@@ -180,6 +182,24 @@ async def task1():
 @task.on_schedule_task(trigger ='cron', second=0, minute=0, hour=6)
 async def task2():
     print("每天06:00:00（6时0分0秒）调用一次")
+
+task3_status = 0
+@task.on_schedule_task(trigger ='interval', minutes=1)
+async def task3():
+    # 格外注意,在函数内对变量进行全局声明
+    global task3_status
+    if task3_status == 0:
+        task3_status = 1
+        # 修改任务状态为2分钟调用一次
+        task.adjust_interval(task3, 'interval', minutes=2)
+
+    if task3_status == 1:
+        task3_status = 0
+        # 修改任务状态为1分钟调用一次
+        task.adjust_interval(task3, 'interval', minutes=1)
+
+
+
 # 其余插件代码
 
 ```

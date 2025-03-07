@@ -31,6 +31,7 @@ exclude = [
     "*.log",    # 忽略log文件
     "*.ini",    # 忽略ini文件
     "plugins/festival/*",
+    "luo9/message.py",
     "./main.py"
 ]
 

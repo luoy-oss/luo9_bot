@@ -98,11 +98,11 @@ def check_alert_conditions(data):
     response = {}
     current_time = time.time()
 
-    # 存储历史数据
-    history_data[f'{__cpu}'].append((current_time, data['cpu']['total']))
-    history_data[f'{__memory}'].append((current_time, data['memory']['percent']))
-    history_data[f'{__disk_write}'].append((current_time, data['disk']['write_rate']))
-    history_data[f'{__disk_read}'].append((current_time, data['disk']['read_rate']))
+    # # 存储历史数据
+    # history_data[f'{__cpu}'].append((current_time, data['cpu']['total']))
+    # history_data[f'{__memory}'].append((current_time, data['memory']['percent']))
+    # history_data[f'{__disk_write}'].append((current_time, data['disk']['write_rate']))
+    # history_data[f'{__disk_read}'].append((current_time, data['disk']['read_rate']))
 
     metrics = {
         __cpu: data['cpu']['total'],
