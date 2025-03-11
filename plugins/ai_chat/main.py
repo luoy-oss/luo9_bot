@@ -218,6 +218,8 @@ async def message_reply(message, group_id, user_id):
 
     if reply.find("|cron|") != -1:
         [cron_req, reply] = reply.split('|cron|')
+        await luo9.send_group_message(group_id, "申请定时：" + cron_req)
+        time.sleep(1)
         await handle_cron_request(cron_req, group_id)
 
     # # 将分割后的消息放入队列
