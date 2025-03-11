@@ -26,6 +26,15 @@ config = {
     'message_types': ['group_message']
 }
 
+pre_disk = None
+task_handle = {
+    "status": False,
+    "cpu": False,
+    "memory": False,
+    "disk_write": False,
+    "disk_read": False
+}
+
 def __load_config(path, file_name):
     config_path = os.path.join(path, file_name)
     try:
@@ -40,14 +49,6 @@ def __load_config(path, file_name):
 
 __pc_config = __load_config(value.plugin_path + '/pc_status', 'config.yaml')
 
-pre_disk = None
-task_handle = {
-    "status": False,
-    "cpu": False,
-    "memory": False,
-    "disk_write": False,
-    "disk_read": False
-}
 
 @task.on_schedule_task(trigger ='interval', seconds=5)
 async def pc_status_task():
@@ -108,7 +109,8 @@ async def pc_status_task():
                 await luo9.send_private_msg(user_id, msg)
     
 pc_status_limit = MessageLimit("pc_status_limit")
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
     message = message.content
     if message == "status" and pc_status_limit.check(5):
         pc_status_limit.handle()

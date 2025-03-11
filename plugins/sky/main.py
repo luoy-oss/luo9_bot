@@ -20,7 +20,8 @@ skyjl_limit = MessageLimit('skyjl')
 
 repeate_message = ''
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
     message = message.content
     if skyhs_limit.check(30) and (message == "sky红石" or message == "sky红石雨" or message == "sky黑石"):
         skyhs_limit.handle()

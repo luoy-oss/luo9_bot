@@ -247,8 +247,12 @@ async def active_message(message, group_id, user_id):
     message_package['group_id'] = str(group_id)
     message_package['user_id'] = str(user_id)
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
+    user_id = message.user_id
+    # time = message.time
     message = message.content
+
     if message == "开启对话":
         return await start_conversation(group_id, user_id)
     elif message == "停止对话":

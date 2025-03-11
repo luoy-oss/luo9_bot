@@ -19,7 +19,8 @@ config = {
 一言_limit = MessageLimit('一言')
 情话_limit = MessageLimit('情话')
 一言_网易云_limit = MessageLimit('一言_网易云')
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
     message = message.content
     if check.at_check(message, value.bot_id):
         global 舔狗日记_limit

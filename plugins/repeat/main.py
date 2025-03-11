@@ -14,7 +14,8 @@ config = {
 
 repeate_message = ''
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
     message = message.content
     global repeate_message
     # 3次重复消息检测

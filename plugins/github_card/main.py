@@ -17,7 +17,8 @@ config = {
 
 github_card_limit = MessageLimit('github_card')
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
     message = message.content
     if "github.com" in message and github_card_limit.check(10):
         github_card_limit.handle()

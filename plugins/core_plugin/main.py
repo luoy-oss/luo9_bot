@@ -11,7 +11,9 @@ config = {
     'message_types': ['group_message']
 }
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
+    user_id = message.user_id
     message = message.content
     path = await check.data_path_check(group_id, user_id)
     if message == "签到" or message == "打卡":

@@ -10,6 +10,9 @@
 # 仅保留default_prompt
 !/plugins/ai_chat/prompts/default_prompts.txt
 
+*.ttf
+*.html
+
 # 忽略本地config.yaml配置文件，保留样例(example)文件
 /config.yaml
 

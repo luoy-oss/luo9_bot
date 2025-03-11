@@ -20,7 +20,9 @@ config = {
     'message_types': ['group_message']
 }
 
-async def group_handle(message: GroupMessage, group_id, user_id):
+async def group_handle(message: GroupMessage):
+    group_id = message.group_id
+    user_id = message.user_id
     message = message.content
     path = await check.data_path_check(group_id, user_id)
     if check.at_check(message, value.bot_id):
