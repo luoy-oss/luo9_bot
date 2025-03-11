@@ -1,14 +1,15 @@
 import logging
-import threading
 import os
 import yaml
 import asyncio
 import time
 import warnings
+import json
 from openai import OpenAI
 from luo9.api_manager import luo9
 from luo9.message import GroupMessage
 from luo9.timeout import Timeout
+from luo9.tasks import task
 from config import get_value
 value = get_value()
 
@@ -112,7 +113,7 @@ lock = asyncio.Lock()
 chat_contexts = {}  # 上下文
 active_conversations = set()  # 当前活跃对话
 
-MAX_GROUPS = 20  # 最大对话轮次
+MAX_GROUPS = 5  # 最大对话轮次
 FREQUENCY_PENALTY = 2   # -2.0 ~ 2.0 >0 降低模型重复相同内容的可能性
 PRESENCE_PENALTY = 1    # -2.0 ~ 2.0 >0 增加模型谈论新主题的可能性
 MAX_TOKEN = 4096  # 最大token数
@@ -138,8 +139,6 @@ async def get_deepseek_response(message, user_id):
                     {"role": "system", "content": prompt_content},
                     *chat_contexts[user_id][-MAX_GROUPS * 2:]
                 ]
-            print(chat_contexts[user_id])
-            print(*chat_contexts[user_id])
 
             response = client.chat.completions.create(
                 model=__ai_config['model'],
@@ -205,15 +204,27 @@ async def restart_conversation(group_id, user_id):
 message_package = {
     "message": "",
     "group_id": "",
-    "user_id": ""
+    "user_id": "",
+    "user_name": "",
+    "time": ""
 }
+from .cron import handle_cron_request
+
 async def message_reply(message, group_id, user_id):
+    print(message)
     reply = await get_deepseek_response(message, user_id)
     if "</think>" in reply:
         reply = reply.split("</think>", 1)[1].strip()
 
-    # 将分割后的消息放入队列
-    # [status, reply] = reply.split('|^^^|')
+    if reply.find("|cron|") != -1:
+        [cron_req, reply] = reply.split('|cron|')
+        await handle_cron_request(cron_req, group_id)
+
+    # # 将分割后的消息放入队列
+    # if reply.find("|^^^|") != -1:
+    #     [status, reply] = reply.split('|^^^|')
+    #     print("申请心情调整：", status)
+
     message_list = reply.split('\\')
 
     # await luo9.send_group_message(group_id, status)
@@ -230,39 +241,45 @@ async def message_reply(message, group_id, user_id):
 
 async def call_back():
     global message_package
-    message, group_id, user_id = message_package['message'], message_package['group_id'], message_package['user_id']
+    message = f"[{message_package['time']}]: {message_package['message']}"
+    group_id, user_id = message_package['group_id'], message_package['user_id']
     message_package = {
         "message": "",
         "group_id": "",
-        "user_id": ""
+        "user_id": "",
+        "user_name": "",
+        "time": ""
     }
     await message_reply(message, group_id, user_id)
 
 # @TODO(luoy-oss) 可能存在多用户影响定时器的问题，请后续更新完善
 # 10秒内未获得新输入，进行回复
-@Timeout(wait=10, on_timeout=call_back)
-async def active_message(message, group_id, user_id):
+@Timeout(wait=8, on_timeout=call_back)
+async def active_message(message: GroupMessage):
     global message_package
-    message_package['message'] += f"{message}\n"
-    message_package['group_id'] = str(group_id)
-    message_package['user_id'] = str(user_id)
+    curtime = time.strftime("%Y年%m月%d日%H时%M分%S秒", time.localtime(message.time))
+    message_package['message'] += f"{message.content}\n"
+    message_package['group_id'] = str(message.group_id)
+    message_package['user_id'] = str(message.user_id)
+    message_package['user_name'] = message.user_name
+    message_package['time'] = curtime
+    
 
 async def group_handle(message: GroupMessage):
+    content = message.content
     group_id = message.group_id
     user_id = message.user_id
-    # time = message.time
-    message = message.content
 
-    if message == "开启对话":
+    if content == "开启对话":
         return await start_conversation(group_id, user_id)
-    elif message == "停止对话":
+    elif content == "停止对话":
         return await stop_conversation(group_id, user_id)
-    elif message == "遗忘对话":
+    elif content == "遗忘对话":
         return await forget_conversation(group_id, user_id)
-    elif message == "重启对话":
+    elif content == "重启对话":
         return await restart_conversation(group_id, user_id)
     elif user_id in active_conversations:
-        await active_message(message, group_id, user_id)
+        await active_message(message)
     else:
         return "对话未开启，请输入'开启对话'以开始聊天。"
 

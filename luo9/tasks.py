@@ -47,4 +47,15 @@ class Task:
         )
         print(f"已调整 {func.__name__} 新定时任务 {trigger} : {kwargs}")
 
+    def add_task(self, func: Callable[[], Coroutine[Any, Any, None]], trigger: str, **kwargs):
+        """动态添加新的定时任务"""
+        print(f"添加新定时任务：{func.__name__}\t{trigger}\t{kwargs}")
+        job = self._scheduler.add_job(
+            func,
+            trigger=trigger,
+            **kwargs
+        )
+        self._job_mapping[func] = job.id
+        print(f"新定时任务 {func.__name__} 已添加")
+
 task = Task()
