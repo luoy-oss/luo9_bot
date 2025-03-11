@@ -2,6 +2,7 @@ import requests
 import utils.download_img as uimg
 from luo9.api_manager import luo9
 from utils.message_limit import MessageLimit
+from luo9.message import GroupMessage
 from config import get_value
 value = get_value()
 
@@ -19,7 +20,8 @@ skyjl_limit = MessageLimit('skyjl')
 
 repeate_message = ''
 
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     if skyhs_limit.check(30) and (message == "sky红石" or message == "sky红石雨" or message == "sky黑石"):
         skyhs_limit.handle()
         img_url = 'https://api.zxz.ee/api/sky/?type=&lx=hs'

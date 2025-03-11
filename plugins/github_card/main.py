@@ -1,5 +1,6 @@
 import re
 from luo9.api_manager import luo9
+from luo9.message import GroupMessage
 import utils.download_img as uimg
 from utils.message_limit import MessageLimit
 from config import get_value
@@ -16,7 +17,8 @@ config = {
 
 github_card_limit = MessageLimit('github_card')
 
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     if "github.com" in message and github_card_limit.check(10):
         github_card_limit.handle()
         pattern = r".*?(?=github.com)"

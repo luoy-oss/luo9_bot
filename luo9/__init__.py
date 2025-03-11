@@ -1,4 +1,4 @@
-__all__ = ['tasks', 'drivers', 'message', 'notice']
+__all__ = ['tasks', 'drivers', 'handle']
 
 from .drivers import driver
 from .tasks import task

@@ -9,8 +9,7 @@ import asyncio
 
 from luo9 import get_driver
 from flask import Flask, request
-from luo9.message import message_handle
-from luo9.notice import notice_handle
+from luo9.handle import message_handle, notice_handle
 from concurrent.futures import ThreadPoolExecutor
 
 driver = get_driver()

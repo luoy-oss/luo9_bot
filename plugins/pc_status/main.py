@@ -7,6 +7,7 @@ from utils.message_limit import MessageLimit
 from config import get_value
 from luo9 import get_driver
 from luo9 import get_task
+from luo9.message import GroupMessage
 
 from . import server as pc
 
@@ -107,7 +108,8 @@ async def pc_status_task():
                 await luo9.send_private_msg(user_id, msg)
     
 pc_status_limit = MessageLimit("pc_status_limit")
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     if message == "status" and pc_status_limit.check(5):
         pc_status_limit.handle()
         global pre_disk

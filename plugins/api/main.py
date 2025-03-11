@@ -2,6 +2,7 @@ import requests
 import random
 import utils.check as check
 from luo9.api_manager import luo9
+from luo9.message import GroupMessage
 from utils.message_limit import MessageLimit
 from config import get_value
 value = get_value()
@@ -18,7 +19,8 @@ config = {
 一言_limit = MessageLimit('一言')
 情话_limit = MessageLimit('情话')
 一言_网易云_limit = MessageLimit('一言_网易云')
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     if check.at_check(message, value.bot_id):
         global 舔狗日记_limit
         global 一言_limit

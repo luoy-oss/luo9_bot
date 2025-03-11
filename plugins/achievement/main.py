@@ -4,6 +4,7 @@ import sqlite3
 import platform
 import utils.check as check
 from luo9.api_manager import luo9
+from luo9.message import GroupMessage
 from random import choices
 from plugins.festival import FestivalCalendar
 from .data_value import festival_achievement
@@ -19,7 +20,8 @@ config = {
     'message_types': ['group_message']
 }
 
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     path = await check.data_path_check(group_id, user_id)
     if check.at_check(message, value.bot_id):
         festival_reward = await festival_match(check.without_at(message, value.bot_id), group_id, user_id, path)

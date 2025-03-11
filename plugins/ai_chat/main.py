@@ -7,6 +7,7 @@ import time
 import warnings
 from openai import OpenAI
 from luo9.api_manager import luo9
+from luo9.message import GroupMessage
 from luo9.timeout import Timeout
 from config import get_value
 value = get_value()
@@ -25,7 +26,6 @@ def calculate_delay(message_list):
 
     for i in range(len(message_list) - 1):
         current_message = message_list[i]
-        message_list[i + 1]
 
         current_message_length = len(current_message)
 
@@ -107,17 +107,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 user_queues = {}  # 用户消息
-queue_lock = threading.Lock()  # 队列访问锁
+lock = asyncio.Lock()
+# queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # 上下文
 active_conversations = set()  # 当前活跃对话
 
-MAX_GROUPS = 5  # 最大对话轮次
-MAX_TOKEN = 1000  # 最大token数
-TEMPERATURE = 0.7  # 温度参数
+MAX_GROUPS = 20  # 最大对话轮次
+FREQUENCY_PENALTY = 2   # -2.0 ~ 2.0 >0 降低模型重复相同内容的可能性
+PRESENCE_PENALTY = 1    # -2.0 ~ 2.0 >0 增加模型谈论新主题的可能性
+MAX_TOKEN = 4096  # 最大token数
+TEMPERATURE = 1.3  # 温度参数
 
-def get_deepseek_response(message, user_id):
+async def get_deepseek_response(message, user_id):
     try:
-        with queue_lock:
+        async with lock:
             if user_id not in chat_contexts:
                 chat_contexts[user_id] = []
 
@@ -131,13 +134,20 @@ def get_deepseek_response(message, user_id):
                     del chat_contexts[user_id][0]
 
         try:
-            response = client.chat.completions.create(
-                model=__ai_config['model'],
-                messages=[
+            messages = [
                     {"role": "system", "content": prompt_content},
                     *chat_contexts[user_id][-MAX_GROUPS * 2:]
-                ],
+                ]
+            print(chat_contexts[user_id])
+            print(*chat_contexts[user_id])
+
+            response = client.chat.completions.create(
+                model=__ai_config['model'],
+                messages=messages,
+                frequency_penalty=FREQUENCY_PENALTY,
+                presence_penalty=PRESENCE_PENALTY,
                 temperature=TEMPERATURE,
+                top_p=0.1,
                 max_tokens=MAX_TOKEN,
                 stream=False
             )
@@ -153,9 +163,9 @@ def get_deepseek_response(message, user_id):
         logger.info(f"API响应 - 用户ID: {user_id}")
         logger.info(f"响应内容: {reply}")
 
-        with queue_lock:
+        async with lock:
             chat_contexts[user_id].append({"role": "assistant", "content": reply})
-            
+
         return reply
 
     except Exception as e:
@@ -163,14 +173,14 @@ def get_deepseek_response(message, user_id):
         return "睡着了..."
 
 async def start_conversation(group_id, user_id):
-    with queue_lock:
+    async with lock:
         if user_id in active_conversations:
             return await luo9.send_group_message(group_id, __ai_config['messages']['start_conversation']['redo'])
         active_conversations.add(user_id)
         return await luo9.send_group_message(group_id, __ai_config['messages']['start_conversation']['success'])
 
 async def stop_conversation(group_id, user_id):
-    with queue_lock:
+    async with lock:
         if user_id not in active_conversations:
             return await luo9.send_group_message(group_id, __ai_config['messages']['stop_conversation']['redo'])
         active_conversations.remove(user_id)
@@ -178,7 +188,7 @@ async def stop_conversation(group_id, user_id):
 
 # TODO(luoy-oss): 对话遗忘
 async def forget_conversation(group_id, user_id):
-    with queue_lock:
+    async with lock:
         if user_id not in chat_contexts:
             return await luo9.send_group_message(group_id, __ai_config['messages']['forget_conversation']['fail'])
         context_list = "\n".join([f"{i+1}. {msg['content']}" for i, msg in enumerate(chat_contexts[user_id])])
@@ -186,7 +196,7 @@ async def forget_conversation(group_id, user_id):
         print(f"{__ai_config['messages']['forget_conversation']['success']}\n{context_list}")
 
 async def restart_conversation(group_id, user_id):
-    with queue_lock:
+    async with lock:
         if user_id in chat_contexts:
             del chat_contexts[user_id]
         return await luo9.send_group_message(group_id, __ai_config['messages']['restart_conversation']['success'])
@@ -198,7 +208,7 @@ message_package = {
     "user_id": ""
 }
 async def message_reply(message, group_id, user_id):
-    reply = get_deepseek_response(message, user_id)
+    reply = await get_deepseek_response(message, user_id)
     if "</think>" in reply:
         reply = reply.split("</think>", 1)[1].strip()
 
@@ -237,7 +247,8 @@ async def active_message(message, group_id, user_id):
     message_package['group_id'] = str(group_id)
     message_package['user_id'] = str(user_id)
 
-async def group_handle(message, group_id, user_id):
+async def group_handle(message: GroupMessage, group_id, user_id):
+    message = message.content
     if message == "开启对话":
         return await start_conversation(group_id, user_id)
     elif message == "停止对话":
