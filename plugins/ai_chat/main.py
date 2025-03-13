@@ -168,8 +168,11 @@ async def get_deepseek_response(message, user_id):
         return reply
 
     except Exception as e:
-        logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
-        return "睡着了..."
+        if f'user_id' in chat_contexts:
+            logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
+            return "睡着了..."
+        else:
+            return None
 
 async def start_conversation(group_id, user_id):
     async with lock:
@@ -198,7 +201,9 @@ async def restart_conversation(group_id, user_id):
     async with lock:
         if user_id in chat_contexts:
             del chat_contexts[user_id]
-        return await luo9.send_group_message(group_id, __ai_config['messages']['restart_conversation']['success'])
+            return await luo9.send_group_message(group_id, __ai_config['messages']['restart_conversation']['success'])
+        else:
+            return await luo9.send_group_message(group_id, __ai_config['messages']['restart_conversation']['fail'])
 
 
 message_package = {
@@ -213,33 +218,34 @@ from .cron import handle_cron_request
 async def message_reply(message, group_id, user_id):
     print(message)
     reply = await get_deepseek_response(message, user_id)
-    if "</think>" in reply:
-        reply = reply.split("</think>", 1)[1].strip()
+    if reply:
+        if "</think>" in reply:
+            reply = reply.split("</think>", 1)[1].strip()
 
-    if reply.find("|cron|") != -1:
-        [cron_req, reply] = reply.split('|cron|')
-        await luo9.send_group_message(group_id, "申请定时：" + cron_req)
-        time.sleep(1)
-        await handle_cron_request(cron_req, group_id)
+        if reply.find("|cron|") != -1:
+            [cron_req, reply] = reply.split('|cron|')
+            await luo9.send_group_message(group_id, "申请定时：" + cron_req)
+            time.sleep(1)
+            await handle_cron_request(cron_req, group_id)
 
-    # # 将分割后的消息放入队列
-    # if reply.find("|^^^|") != -1:
-    #     [status, reply] = reply.split('|^^^|')
-    #     print("申请心情调整：", status)
+        # # 将分割后的消息放入队列
+        # if reply.find("|^^^|") != -1:
+        #     [status, reply] = reply.split('|^^^|')
+        #     print("申请心情调整：", status)
 
-    message_list = reply.split('\\')
+        message_list = reply.split('\\')
 
-    # await luo9.send_group_message(group_id, status)
-    # message_list.insert(0, status)
+        # await luo9.send_group_message(group_id, status)
+        # message_list.insert(0, status)
 
-    # 启动消息发送任务（如果尚未启动）
-    if not hasattr(group_handle, 'sender_started'):
-        group_handle.sender_started = False
-    if not group_handle.sender_started:
-        await start_message_sender(group_id, message_list)
-        group_handle.sender_started = True
-    else:
-        print(f"消息发送任务已经启动{group_handle.sender_started}")
+        # 启动消息发送任务（如果尚未启动）
+        if not hasattr(group_handle, 'sender_started'):
+            group_handle.sender_started = False
+        if not group_handle.sender_started:
+            await start_message_sender(group_id, message_list)
+            group_handle.sender_started = True
+        else:
+            print(f"消息发送任务已经启动{group_handle.sender_started}")
 
 async def call_back():
     global message_package
@@ -274,12 +280,12 @@ async def group_handle(message: GroupMessage):
 
     if content == "开启对话":
         return await start_conversation(group_id, user_id)
-    elif content == "停止对话":
+    elif content == "停止对话" or content == "关闭对话":
         return await stop_conversation(group_id, user_id)
     elif content == "遗忘对话":
         return await forget_conversation(group_id, user_id)
     elif content == "重启对话":
-        return await restart_conversation(group_id, user_id)
+        return await restart_conversation(group_id, f'{user_id}')
     elif user_id in active_conversations:
         await active_message(message)
     else:
