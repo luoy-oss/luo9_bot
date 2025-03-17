@@ -4,7 +4,6 @@ import yaml
 import asyncio
 import time
 import warnings
-import json
 from openai import OpenAI
 from luo9.api_manager import luo9
 from luo9.message import GroupMessage
@@ -119,7 +118,7 @@ PRESENCE_PENALTY = 1    # -2.0 ~ 2.0 >0 增加模型谈论新主题的可能性
 MAX_TOKEN = 4096  # 最大token数
 TEMPERATURE = 1.3  # 温度参数
 
-async def get_deepseek_response(message, user_id):
+async def get_deepseek_response(message, curtime, user_id):
     try:
         async with lock:
             if user_id not in chat_contexts:
@@ -135,8 +134,9 @@ async def get_deepseek_response(message, user_id):
                     del chat_contexts[user_id][0]
 
         try:
+            time_prompt = f"\n你的时间为：{curtime}\n"
             messages = [
-                    {"role": "system", "content": prompt_content},
+                    {"role": "system", "content": prompt_content + time_prompt},
                     *chat_contexts[user_id][-MAX_GROUPS * 2:]
                 ]
 
@@ -215,9 +215,9 @@ message_package = {
 }
 from .cron import handle_cron_request
 
-async def message_reply(message, group_id, user_id):
+async def message_reply(message, curtime, group_id, user_id):
     print(message)
-    reply = await get_deepseek_response(message, user_id)
+    reply = await get_deepseek_response(message, curtime, user_id)
     if reply:
         if "</think>" in reply:
             reply = reply.split("</think>", 1)[1].strip()
@@ -249,7 +249,8 @@ async def message_reply(message, group_id, user_id):
 
 async def call_back():
     global message_package
-    message = f"[{message_package['time']}]: {message_package['message']}"
+    message = message_package['message']
+    curtime = message_package['time']
     group_id, user_id = message_package['group_id'], message_package['user_id']
     message_package = {
         "message": "",
@@ -258,7 +259,7 @@ async def call_back():
         "user_name": "",
         "time": ""
     }
-    await message_reply(message, group_id, user_id)
+    await message_reply(message, curtime, group_id, user_id)
 
 # @TODO(luoy-oss) 可能存在多用户影响定时器的问题，请后续更新完善
 # 10秒内未获得新输入，进行回复
