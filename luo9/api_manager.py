@@ -53,6 +53,10 @@ class APIManager:
     async def send_group_message(self, group_id, message, ignore=True):
         await self._call_group_method('send_group_message', group_id, message)
 
+    # 群聊消息
+    async def send_group_ai_record(self, group_id, voice, message):
+        await self._call_group_method('send_group_ai_record', group_id, voice, message)
+
     # 群聊AT
     async def send_group_at(self, group_id, qq):
         await self._call_group_method('send_group_at', group_id, qq)

@@ -19,6 +19,22 @@ async def send_group_message(group_id, message):
         print("Failed to send message")
         print(response.status_code, response.text)
 
+async def send_group_ai_record(group_id, character, text):
+    url = f"{value.base_url}/send_group_ai_record"
+    params = {
+        "group_id": group_id,
+        "character": character,
+        "text": text,
+        "access_token": value.access_token
+    }
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        print("AI record sent successfully")
+    else:
+        print("Failed to send AI record")
+        print(response.status_code, response.text)
+        
 
 async def send_group_at(group_id, qq):
     url = f"{value.base_url}/send_group_msg"
