@@ -1,7 +1,10 @@
 import asyncio
 import json
+
 from luo9.tasks import task
 from luo9.api_manager import luo9
+from config import get_value
+value = get_value()
 
 def parse_cron_expression(exp: str) -> dict:
     fields = exp.strip().split()
@@ -22,10 +25,13 @@ def parse_cron_expression(exp: str) -> dict:
     # 处理年份字段（如果存在）
     if len(fields) == 7:
         cron_kwargs['year'] = replaced[6]
+    else:
+        cron_kwargs['year'] = '*'
     
     return cron_kwargs
 
 async def notice_message(messages, group_id):
+    # await luo9.send_group_ai_record(group_id, value.AI语音音色, messages)
     await luo9.send_group_message(group_id, messages)
 
 async def handle_cron_request(cron_req, group_id):
