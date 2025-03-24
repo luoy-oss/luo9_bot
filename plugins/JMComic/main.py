@@ -74,15 +74,16 @@ def get_JMComic_pdf(id) -> str:
     pdf_file_path = ""
     with os.scandir(path) as entries:
         for entry in entries:
-            if entry.is_dir():
+            if entry.is_dir() and entry.name == f"{id}":
+                print(entry.name)
                 if os.path.exists(os.path.join(path +'/' +entry.name + ".pdf")):
                     print("文件：《%s》 已存在，跳过" % entry.name)
                     pdf_file_path = path +'/' +entry.name + ".pdf"
-                    continue
                 else:
                     print("开始转换：%s " % entry.name)
                     pdf_file_path = all2PDF(path + "/" + entry.name, path, entry.name)
-
+                break
+    print("pdf_file_path:", pdf_file_path)
     return pdf_file_path
 
 jm_limit = MessageLimit('JMComic')
@@ -110,7 +111,7 @@ async def group_handle(message: GroupMessage):
             pdf_file_path = get_JMComic_pdf(comic_id)
             # 利用luo9.get_group_root_files(group_id)查找到：
             # JMComic文件夹id：/084d297e-ab55-4743-8aab-d1a6d08596e3
-            await luo9.send_group_message(group_id, f"漫画 {comic_id} 已下载完成并转换为PDF")
+            await luo9.send_group_message(group_id, f"漫画 {comic_id} 下载完成，正在上传...")
             file_name = f"{comic_id}.pdf"
             await luo9.send_group_file(group_id, pdf_file_path, file_name, "/084d297e-ab55-4743-8aab-d1a6d08596e3")
         else:
