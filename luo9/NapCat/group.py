@@ -66,6 +66,23 @@ async def send_group_image(group_id, file):
         print("Failed to send message")
         print(response.status_code, response.text)
 
+async def upload_group_file(group_id, file, name, folder_id):
+    url = f"{value.base_url}/upload_group_file"
+    params = {
+        "group_id": group_id,
+        "file": file,
+        "name": name,
+        "folder_id": folder_id,
+        "access_token": value.access_token
+    }
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        print("File uploaded successfully")
+    else:
+        print("Failed to upload file")
+        print(response.status_code, response.text)
+
 async def send_group_poke(group_id, user_id):
     if user_id != value.bot_id:
         url = f"{value.base_url}/group_poke"
@@ -115,3 +132,37 @@ async def send_group_ai_radio(group_id, character, text):
     else:
         print("Failed to send AI radio")
         print(response.status_code, response.text)
+
+
+
+async def get_group_files_by_folder(group_id, folder_id, file_count):
+    url = f"{value.base_url}/get_group_files_by_folder"
+    params = {
+        "group_id": group_id,
+        "folder_id": folder_id,
+        "file_count": file_count,
+        "access_token": value.access_token
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        print("File list retrieved successfully")
+        return response.json()
+    else:
+        print("Failed to retrieve file list")
+        print(response.status_code, response.text)
+        return None
+
+async def get_group_root_files(group_id):
+    url = f"{value.base_url}/get_group_root_files"
+    params = {
+        "group_id": group_id,
+        "access_token": value.access_token
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        print("File list retrieved successfully")
+        return response.json()
+    else:
+        print("Failed to retrieve file list")
+        print(response.status_code, response.text)
+        return None
