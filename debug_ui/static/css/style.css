@@ -1,0 +1,193 @@
+/* 全局样式 */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* 主容器 */
+.main-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 头部 */
+.el-header {
+    padding: 0;
+    background-color: #409EFF;
+    color: white;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+    padding: 0 20px;
+}
+
+.logo h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.header-controls {
+    display: flex;
+    gap: 10px;
+}
+
+/* 侧边栏 */
+.el-aside {
+    background-color: #f5f7fa;
+    border-right: 1px solid #e6e6e6;
+    overflow-y: auto;
+    height: calc(100vh - 60px);
+}
+
+.sidebar {
+    padding: 20px;
+}
+
+.sidebar-section {
+    margin-bottom: 20px;
+}
+
+.sidebar-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+    color: #606266;
+}
+
+.setting-item {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.setting-item span {
+    margin-bottom: 5px;
+    color: #606266;
+}
+
+/* 主内容区 */
+.el-main {
+    padding: 0;
+    height: calc(100vh - 60px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 聊天容器 */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background-color: #f5f7fa;
+}
+
+.chat-input {
+    padding: 10px 20px;
+    background-color: white;
+    border-top: 1px solid #e6e6e6;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.input-controls {
+    display: flex;
+    gap: 10px;
+}
+
+/* 消息样式 */
+.message {
+    margin-bottom: 15px;
+    max-width: 80%;
+    animation: fadeIn 0.3s ease;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.8rem;
+    color: #909399;
+}
+
+.message-content {
+    padding: 10px;
+    border-radius: 4px;
+    word-break: break-word;
+}
+
+.incoming {
+    align-self: flex-start;
+}
+
+.incoming .message-content {
+    background-color: white;
+    border: 1px solid #e6e6e6;
+}
+
+.outgoing {
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+.outgoing .message-content {
+    background-color: #ecf5ff;
+    border: 1px solid #d9ecff;
+}
+
+.message-image img {
+    max-width: 100%;
+    max-height: 300px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.message-audio audio {
+    width: 100%;
+}
+
+.message-video video {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 4px;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .el-aside {
+        width: 100% !important;
+        height: auto;
+    }
+    
+    .main-container {
+        flex-direction: column;
+    }
+    
+    .message {
+        max-width: 90%;
+    }
+}

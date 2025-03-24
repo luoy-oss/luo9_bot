@@ -18,6 +18,7 @@
 
 #忽略当前目录下的data目录
 /data
+/windows-app
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
