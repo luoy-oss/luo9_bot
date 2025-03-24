@@ -63,7 +63,7 @@ def all2PDF(input_folder, pdfpath, pdfname):
     return pdf_file_path
     
 def get_JMComic_pdf(id) -> str:
-    config = f"{value.plugin_path}/JMComic/config.yml"
+    config = f"{value.plugin_path}/JMComic/config.yaml"
     loadConfig = jmcomic.JmOption.from_file(config)
     jmcomic.download_album(id,loadConfig)
 

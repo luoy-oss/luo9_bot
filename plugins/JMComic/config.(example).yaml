@@ -1,7 +1,7 @@
 # Github Actions 下载脚本配置
 version: '2.0'
 dir_rule:
-  base_dir: /home/ubuntu/luo9/luo9_bot/data/plugins/JMComic
+  base_dir: H:/luo9/luo9_bot/data/plugins/JMComic
   # 规则: 根目录 / 本子id / 章节序号 / 图片文件
   # rule: 'Bd  / Aid   / Pindex'
   # rule: 'Bd_Atitle_Pindex'
