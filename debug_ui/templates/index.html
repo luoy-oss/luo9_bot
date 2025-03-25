@@ -99,26 +99,11 @@
                 <el-main>
                     <div class="chat-container">
                         <div class="chat-messages" ref="messagesContainer">
-                            <div v-for="message in messages" :key="message.id" 
-                                 :class="['message', message.direction === 'outgoing' ? 'outgoing' : 'incoming']">
-                                <div class="message-header">
-                                    <span class="message-time">{{ message.formatted_time }}</span>
-                                    <span class="message-sender">
-                                        {{ message.direction === 'outgoing' ? '用户' : '机器人' }}
-                                        ({{ message.user_id }})
-                                    </span>
-                                </div>
-                                <div class="message-content">
-                                    <div v-if="message.type === 'text'" v-html="formatMessage(message.content)"></div>
-                                    <div v-else-if="message.type === 'image'" class="message-image">
-                                        <img :src="'/uploads/' + message.content.split('/').pop()" alt="图片" @click="previewImage(message.content)">
-                                    </div>
-                                    <div v-else-if="message.type === 'audio'" class="message-audio">
-                                        <audio controls :src="'/uploads/' + message.content.split('/').pop()"></audio>
-                                    </div>
-                                    <div v-else-if="message.type === 'video'" class="message-video">
-                                        <video controls :src="'/uploads/' + message.content.split('/').pop()"></video>
-                                    </div>
+                            <!-- 消息列表部分 -->
+                            <div class="message-list">
+                                <div v-for="message in messages" :key="message.id" 
+                                     :class="['message-container', message.direction]">
+                                    <div class="message-content" v-html="formatMessage(message.content, message.type)"></div>
                                 </div>
                             </div>
                         </div>
@@ -166,9 +151,18 @@
             </el-container>
         </el-container>
         
+        <!-- 将现有的图片预览对话框替换为以下代码 -->
         <!-- 图片预览 -->
-        <el-dialog :visible.sync="imagePreviewVisible" append-to-body>
-            <img width="100%" :src="imagePreviewUrl" alt="预览图片">
+        <el-dialog 
+            :visible.sync="imagePreviewVisible" 
+            append-to-body
+            custom-class="image-preview-dialog"
+            :show-close="true"
+            :modal="true"
+            :close-on-click-modal="true"
+            :close-on-press-escape="true"
+            width="80%">
+            <img :src="imagePreviewUrl" alt="预览图片" @load="imageLoaded" v-if="imagePreviewVisible">
         </el-dialog>
         
         <!-- 通知 -->

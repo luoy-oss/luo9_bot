@@ -51,6 +51,7 @@ new Vue({
             });
         }
     },
+    // 在Vue实例的methods中添加
     methods: {
         // 初始化WebSocket连接
         initSocket() {
@@ -314,14 +315,40 @@ new Vue({
         
         // 预览图片
         previewImage(imagePath) {
-            this.imagePreviewUrl = '/uploads/' + imagePath.split('/').pop();
-            this.imagePreviewVisible = true;
+            // 使用完整路径或文件名
+            const filename = imagePath.includes('/') ? imagePath.split('/').pop() : imagePath;
+            this.imagePreviewUrl = '/uploads/' + filename;
+            
+            // 预加载图片
+            const img = new Image();
+            img.onload = () => {
+                this.imagePreviewVisible = true;
+            };
+            img.onerror = () => {
+                this.$message.error('图片加载失败');
+            };
+            img.src = this.imagePreviewUrl;
         },
         
         // 格式化消息内容
-        formatMessage(content) {
+        formatMessage(content, type) {
+            // 如果是图片类型，优化图片HTML渲染
+            if (type === 'image') {
+                return `<div class="message-image">
+                    <img src="/uploads/${content}" alt="图片" 
+                         loading="lazy" 
+                         onclick="app.previewImage('${content}')"
+                         onerror="this.onerror=null;this.src='/static/img/image-error.png';">
+                </div>`;
+            }
+            
             // 使用marked库将markdown格式转换为HTML
             try {
+                // 配置marked以正确处理换行符
+                marked.setOptions({
+                    breaks: true,  // 将换行符转换为<br>
+                    gfm: true      // 使用GitHub风格的Markdown
+                });
                 return marked.parse(content);
             } catch (e) {
                 return content;
