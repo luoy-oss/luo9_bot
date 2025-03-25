@@ -212,6 +212,34 @@ new Vue({
         },
         
         // 发送消息
+        enterSendMessage(event) {
+            // 如果按下Shift+Enter，不处理（允许换行）
+            if (event.shiftKey) {
+                return;
+            }
+            
+            // 阻止默认行为（添加换行符）
+            event.preventDefault();
+            
+            // 清理消息内容，去除可能的换行符
+            const cleanMessage = this.inputMessage.trim();
+            
+            // 如果消息不为空且正在调试中，则发送消息
+            if (cleanMessage && this.isDebugging) {
+                const messageData = {
+                    content: cleanMessage,
+                    user_id: parseInt(this.userId),
+                    group_id: parseInt(this.groupId),
+                    message_type: this.messageType,
+                    type: 'text'
+                };
+                
+                this.socket.emit('send_message', messageData);
+                this.inputMessage = '';
+            }
+        },
+
+        // 发送消息
         sendMessage() {
             if (!this.inputMessage.trim() || !this.isDebugging) return;
             
@@ -318,13 +346,63 @@ new Vue({
         },
         
         // 显示通知
-        showNotification(message) {
-            this.notificationMessage = message;
-            this.notificationVisible = true;
+        showNotification(message, type = 'info') {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            
+            // 根据类型设置图标
+            let icon = '';
+            let title = '';
+            switch(type) {
+                case 'success':
+                    icon = '✓';
+                    title = '成功';
+                    break;
+                case 'warning':
+                    icon = '⚠';
+                    title = '警告';
+                    break;
+                case 'error':
+                    icon = '✗';
+                    title = '错误';
+                    break;
+                case 'info':
+                default:
+                    icon = 'ℹ';
+                    title = '信息';
+                    break;
+            }
+            
+            // 设置通知内容
+            notification.innerHTML = `
+                <div class="notification-icon">${icon}</div>
+                <div class="notification-content">
+                    <div class="notification-title">${title}</div>
+                    <div class="notification-message">${message}</div>
+                </div>
+            `;
+            
+            // 添加到容器
+            const container = document.getElementById('notification-container');
+            container.appendChild(notification);
+            
+            // 触发动画
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                notification.classList.remove('show');
+                
+                // 等待过渡动画完成后移除元素
+                setTimeout(() => {
+                    container.removeChild(notification);
+                }, 300);
+            }, 3000);
         },
 
-        // 在 app.js 的 methods 对象中添加以下方法
-        
         // 删除单个历史记录
         deleteHistorySession(filename) {
             this.$confirm('确定要删除此历史记录及其相关图片吗？', '提示', {

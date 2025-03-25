@@ -191,3 +191,71 @@ html, body {
         max-width: 90%;
     }
 }
+
+/* 通知样式 */
+.notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 350px;
+}
+
+.notification {
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: flex-start;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.notification.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.notification-icon {
+    margin-right: 10px;
+    font-size: 20px;
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.notification-message {
+    word-break: break-word;
+}
+
+.notification-success {
+    background-color: #f0f9eb;
+    border-left: 4px solid #67c23a;
+    color: #67c23a;
+}
+
+.notification-warning {
+    background-color: #fdf6ec;
+    border-left: 4px solid #e6a23c;
+    color: #e6a23c;
+}
+
+.notification-error {
+    background-color: #fef0f0;
+    border-left: 4px solid #f56c6c;
+    color: #f56c6c;
+}
+
+.notification-info {
+    background-color: #f4f4f5;
+    border-left: 4px solid #909399;
+    color: #909399;
+}
