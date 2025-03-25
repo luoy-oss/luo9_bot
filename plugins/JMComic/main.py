@@ -32,13 +32,19 @@ def all2PDF(input_folder, pdfpath, pdfname):
                 zimulu.append(int(entry.name))
     # 对数字进行排序
     zimulu.sort()
+    print(zimulu)
 
     # 收集所有图片路径
     for i in zimulu:
+        chapter_images = []
         with os.scandir(paht + "/" + str(i)) as entries:
             for entry in entries:
                 if entry.is_file() and "jpg" in entry.name:
-                    image_paths.append(paht + "/" + str(i) + "/" + entry.name)
+                    chapter_images.append(paht + "/" + str(i) + "/" + entry.name)
+        
+        # 对每个章节内的图片按文件名数字排序
+        chapter_images.sort(key=lambda x: int(os.path.basename(x).split('.')[0]))
+        image_paths.extend(chapter_images)
 
     if not image_paths:
         print("没有找到图片文件")
@@ -140,12 +146,12 @@ async def group_handle(message: GroupMessage):
         # 获取匹配到的ID (可能在第一个或第二个捕获组中)
         comic_id = match.group(1) or match.group(2)
         if comic_id:
-            response = await luo9.get_group_files_by_folder(group_id, "/084d297e-ab55-4743-8aab-d1a6d08596e3", 10)
-            for file in response['data']['files']:
-                if file['file_name'] == f"{comic_id}.pdf":
-                    # 找到了同名的文件，跳过下载操作
-                    await luo9.send_group_message(group_id, f"漫画 {comic_id} 在群文件中已存在\n请前往JMComic目录查看")
-                    return
+            # response = await luo9.get_group_files_by_folder(group_id, "/084d297e-ab55-4743-8aab-d1a6d08596e3", 10)
+            # for file in response['data']['files']:
+            #     if file['file_name'] == f"{comic_id}.pdf":
+            #         # 找到了同名的文件，跳过下载操作
+            #         await luo9.send_group_message(group_id, f"漫画 {comic_id} 在群文件中已存在\n请前往JMComic目录查看")
+            #         return
 
             # 没有找到同名的文件，执行上传操作
             await luo9.send_group_message(group_id, f"开始下载漫画 ID: {comic_id}，请稍候...")
