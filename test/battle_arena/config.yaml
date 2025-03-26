@@ -1,0 +1,29 @@
+# 格斗游戏配置文件
+name: battle_arena
+version: 1.0.0
+author: drluo
+describe: GIF格斗游戏，包含对战、排行榜、背包、物品和强化功能
+
+# 消息权限
+message_types:
+  - group_message
+
+# 游戏设置
+settings:
+  # 战斗相关
+  battle:
+    max_rounds: 20  # 最大回合数
+    critical_rate: 0.1  # 暴击率
+    critical_damage: 1.5  # 暴击伤害倍率
+  
+  # 经济相关
+  economy:
+    win_exp: 30  # 胜利基础经验
+    win_gold: 50  # 胜利基础金币
+    daily_gold: 100  # 每日奖励基础金币
+  
+  # 强化相关
+  enhancement:
+    base_success_rate: 0.7  # 基础成功率
+    level_penalty: 0.05  # 每级降低的成功率
+    min_success_rate: 0.3  # 最低成功率

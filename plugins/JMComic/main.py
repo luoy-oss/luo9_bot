@@ -32,8 +32,7 @@ def all2PDF(input_folder, pdfpath, pdfname):
                 zimulu.append(int(entry.name))
     # 对数字进行排序
     zimulu.sort()
-    print(zimulu)
-
+    
     # 收集所有图片路径
     for i in zimulu:
         chapter_images = []
@@ -110,28 +109,39 @@ def all2PDF(input_folder, pdfpath, pdfname):
     return pdf_file_path
     
 def get_JMComic_pdf(id) -> str:
-    config = f"{value.plugin_path}/JMComic/config.yml"
-    loadConfig = jmcomic.JmOption.from_file(config)
-    jmcomic.download_album(id,loadConfig)
+    try:
+        config = f"{value.plugin_path}/JMComic/config.yml"
+        loadConfig = jmcomic.JmOption.from_file(config)
+        jmcomic.download_album(id, loadConfig)
 
-    with open(config, "r", encoding="utf8") as f:
-        data = yaml.load(f, Loader=yaml.FullLoader)
-        path = f"{value.data_path}/plugins/JMComic"
+        with open(config, "r", encoding="utf8") as f:
+            data = yaml.load(f, Loader=yaml.FullLoader)
+            path = f"{value.data_path}/plugins/JMComic"
 
-    pdf_file_path = ""
-    with os.scandir(path) as entries:
-        for entry in entries:
-            if entry.is_dir() and entry.name == f"{id}":
-                print(entry.name)
-                if os.path.exists(os.path.join(path +'/' +entry.name + ".pdf")):
-                    print("文件：《%s》 已存在，跳过" % entry.name)
-                    pdf_file_path = path +'/' +entry.name + ".pdf"
-                else:
-                    print("开始转换：%s " % entry.name)
-                    pdf_file_path = all2PDF(path + "/" + entry.name, path, entry.name)
-                break
-    print("pdf_file_path:", pdf_file_path)
-    return pdf_file_path
+        pdf_file_path = ""
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.is_dir() and entry.name == f"{id}":
+                    print(entry.name)
+                    if os.path.exists(os.path.join(path +'/' +entry.name + ".pdf")):
+                        print("文件：《%s》 已存在，跳过" % entry.name)
+                        pdf_file_path = path +'/' +entry.name + ".pdf"
+                    else:
+                        print("开始转换：%s " % entry.name)
+                        pdf_file_path = all2PDF(path + "/" + entry.name, path, entry.name)
+                    break
+        
+        if not pdf_file_path:
+            raise FileNotFoundError(f"未找到漫画ID: {id}的下载目录")
+            
+        print("pdf_file_path:", pdf_file_path)
+        return pdf_file_path
+    except FileNotFoundError as e:
+        print(f"文件未找到: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"下载或转换过程中发生错误: {str(e)}")
+        raise Exception(f"处理漫画时发生错误: {str(e)}")
 
 jm_limit = MessageLimit('JMComic')
 async def group_handle(message: GroupMessage):
@@ -155,11 +165,19 @@ async def group_handle(message: GroupMessage):
 
             # 没有找到同名的文件，执行上传操作
             await luo9.send_group_message(group_id, f"开始下载漫画 ID: {comic_id}，请稍候...")
-            pdf_file_path = get_JMComic_pdf(comic_id)
-            # 利用luo9.get_group_root_files(group_id)查找到：
-            # JMComic文件夹id：/084d297e-ab55-4743-8aab-d1a6d08596e3
-            await luo9.send_group_message(group_id, f"漫画 {comic_id} 下载完成，正在上传...")
-            file_name = f"{comic_id}.pdf"
-            await luo9.send_group_file(group_id, pdf_file_path, file_name, "/084d297e-ab55-4743-8aab-d1a6d08596e3")
+            try:
+                pdf_file_path = get_JMComic_pdf(comic_id)
+                if not pdf_file_path or not os.path.exists(pdf_file_path):
+                    await luo9.send_group_message(group_id, f"漫画 {comic_id} 下载失败，未能生成PDF文件")
+                    return
+                
+                await luo9.send_group_message(group_id, f"漫画 {comic_id} 下载完成，正在上传...")
+                file_name = f"{comic_id}.pdf"
+                try:
+                    await luo9.send_group_file(group_id, pdf_file_path, file_name, "/084d297e-ab55-4743-8aab-d1a6d08596e3")
+                except Exception as e:
+                    await luo9.send_group_message(group_id, f"漫画 {comic_id} 上传失败: {str(e)}")
+            except Exception as e:
+                await luo9.send_group_message(group_id, f"{comic_id} 尝试。。。失败了...")
         else:
             await luo9.send_group_message(group_id, "请提供有效的漫画ID，格式: /jm ID 或 /jmID")

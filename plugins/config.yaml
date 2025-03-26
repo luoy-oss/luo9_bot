@@ -28,9 +28,6 @@ plugins:
   - name: pc_status
     priority: 10
     enable: false
-  - name: battle_arena
-    priority: 20
-    enable: true
   - name: JMComic
     priority: 30
     enable: true
