@@ -4,6 +4,8 @@
 *.ttf
 *.html
 
+
+/Cargo.lock
 /templates/
 /python/
 /debug_ui/

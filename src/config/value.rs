@@ -52,7 +52,7 @@ impl Value {
         let path = config.path.clone();
         let data_path = format!("{}/data", path);
         let plugin_path = format!("{}/plugins", path);
-        let core_path = format!("{}/luo9", path);
+        let core_path = format!("{}/src/core/", path);
         
         let mut value = Self {
             path,
