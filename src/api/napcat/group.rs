@@ -59,7 +59,7 @@ pub async fn send_group_at(base_url: &str, access_token: &str, group_id: &str, q
 }
 
 pub async fn send_group_image(base_url: &str, access_token: &str, group_id: &str, file: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let url = format!("{}/send_group_image", base_url);
+    let url = format!("{}/send_group_msg", base_url);
     let client = Client::new();
     
     let params = json!({
@@ -67,12 +67,15 @@ pub async fn send_group_image(base_url: &str, access_token: &str, group_id: &str
         "message": format!("[CQ:image,file={file}]", file=file),
         "access_token": access_token
     });
-    
-    client.post(&url)
+    println!("{}", params);
+
+    let response = client.post(&url)
         .query(&params)  // 从json改为query
         .send()
         .await?;
     
+    println!("{}", response.text().await?);
+
     Ok(())
 }
 

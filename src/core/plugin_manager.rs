@@ -47,18 +47,27 @@ pub trait Plugin: Send + Sync {
     fn metadata(&self) -> &PluginMetadata;
     
     /// 处理群消息
-    async fn handle_group_message(&self, message: &GroupMessage) -> Result<()>;
+    async fn handle_group_message(&self, message: &GroupMessage) -> Result<()> {
+        // 默认实现，如果插件不支持此类消息，则直接返回 Ok
+        Ok(())
+    }
     
     /// 处理私聊消息
-    async fn handle_private_message(&self, message: &PrivateMessage) -> Result<()>;
+    async fn handle_private_message(&self, message: &PrivateMessage) -> Result<()> {
+        // 默认实现，如果插件不支持此类消息，则直接返回 Ok
+        Ok(())
+    }
     
     /// 处理群戳一戳事件
-    async fn handle_group_poke(&self, target_id: &str, user_id: &str, group_id: &str) -> Result<()>;
+    async fn handle_group_poke(&self, target_id: &str, user_id: &str, group_id: &str) -> Result<()> {
+        // 默认实现，如果插件不支持此类事件，则直接返回 Ok
+        Ok(())
+    }
 }
 
 /// 插件信息结构
 struct PluginInfo {
-    plugin: Box<dyn Plugin>,
+    plugin: Arc<Box<dyn Plugin>>, // 修改为 Arc 包装 Box<dyn Plugin>
     priority: i32,
 }
 
@@ -131,9 +140,9 @@ impl PluginManager {
                                 metadata.name, metadata.author, metadata.describe, metadata.version, metadata.message_types
                             );
                             tracing::info!("---------------------------");();
-                            
+                            // 在 load_plugins 方法中
                             self.plugins.push(PluginInfo {
-                                plugin,
+                                plugin: Arc::new(plugin),  // 使用 Arc 包装 Box<dyn Plugin>
                                 priority: plugin_entry.priority,
                             });
                             
@@ -198,12 +207,29 @@ impl PluginManager {
         let mut plugins = self.plugins.iter().collect::<Vec<_>>();
         plugins.sort_by_key(|p| p.priority);
         
+        // 创建一个任务集合
+        let mut tasks = Vec::new();
+        
         for plugin_info in plugins {
             let metadata = plugin_info.plugin.metadata();
             if metadata.message_types.contains(&"group_message".to_string()) {
-                plugin_info.plugin.handle_group_message(message).await?;
+                // 使用 Arc 克隆而不是直接克隆
+                let plugin = plugin_info.plugin.clone();
+                let message_clone = message.clone();
+                
+                // 创建一个新任务
+                let task = tokio::spawn(async move {
+                    if let Err(e) = plugin.handle_group_message(&message_clone).await {
+                        tracing::error!("插件 {} 处理群消息失败: {}", plugin.metadata().name, e);
+                    }
+                });
+                
+                tasks.push(task);
             }
         }
+        
+        // 不等待任务完成，直接返回
+        // 这样可以实现真正的并行处理
         
         Ok(())
     }
@@ -214,12 +240,29 @@ impl PluginManager {
         let mut plugins = self.plugins.iter().collect::<Vec<_>>();
         plugins.sort_by_key(|p| p.priority);
         
+        // 创建一个任务集合
+        let mut tasks = Vec::new();
+        
         for plugin_info in plugins {
             let metadata = plugin_info.plugin.metadata();
             if metadata.message_types.contains(&"private_message".to_string()) {
-                plugin_info.plugin.handle_private_message(message).await?;
+                // 使用 Arc 克隆而不是直接克隆
+                let plugin = plugin_info.plugin.clone();
+                let message_clone = message.clone();
+                
+                // 创建一个新任务
+                let task = tokio::spawn(async move {
+                    if let Err(e) = plugin.handle_private_message(&message_clone).await {
+                        tracing::error!("插件 {} 处理私聊消息失败: {}", plugin.metadata().name, e);
+                    }
+                });
+                
+                tasks.push(task);
             }
         }
+        
+        // 不等待任务完成，直接返回
+        // 这样可以实现真正的并行处理
         
         Ok(())
     }
@@ -230,14 +273,32 @@ impl PluginManager {
         let mut plugins = self.plugins.iter().collect::<Vec<_>>();
         plugins.sort_by_key(|p| p.priority);
         
+        // 创建一个任务集合
+        let mut tasks = Vec::new();
+        
         for plugin_info in plugins {
             let metadata = plugin_info.plugin.metadata();
             if metadata.message_types.contains(&"group_poke".to_string()) {
-                plugin_info.plugin.handle_group_poke(target_id, user_id, group_id).await?;
+                // 使用 Arc 克隆而不是直接克隆
+                let plugin = plugin_info.plugin.clone();
+                let target_id = target_id.to_string();
+                let user_id = user_id.to_string();
+                let group_id = group_id.to_string();
+                
+                // 创建一个新任务
+                let task = tokio::spawn(async move {
+                    if let Err(e) = plugin.handle_group_poke(&target_id, &user_id, &group_id).await {
+                        tracing::error!("插件 {} 处理戳一戳事件失败: {}", plugin.metadata().name, e);
+                    }
+                });
+                
+                tasks.push(task);
             }
         }
         
+        // 不等待任务完成，直接返回
+        // 这样可以实现真正的并行处理
+        
         Ok(())
     }
-
 }
