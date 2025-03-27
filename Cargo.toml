@@ -1,0 +1,53 @@
+[package]
+name = "luo9_bot"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "洛玖机器人 - Rust 版本"
+
+[dependencies]
+# 异步运行时
+tokio = { version = "1.28", features = ["full"] }
+# Web 框架
+axum = "0.6"
+# 序列化/反序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+# 日志
+tracing = "0.1"
+tracing-subscriber = "0.3"
+# HTTP 客户端
+reqwest = { version = "0.11", features = ["json"] }
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+# 时间处理
+chrono = "0.4"
+# 文件系统操作
+walkdir = "2.3"
+# 正则表达式
+regex = "1.8"
+# 异步流处理
+futures = "0.3"
+# 插件系统 (可选择以下方案之一)
+libloading = "0.8"  # 动态库加载
+wasmer = "4.0"      # WebAssembly
+pyo3 = { version = "0.19", features = ["extension-module"] }  # Python 集成
+
+[lib]
+name = "luo9_bot"
+path = "src/lib.rs"
+
+[[bin]]
+name = "luo9_bot"
+path = "src/main.rs"
+
+# [[bin]]
+# name = "debug"
+# path = "src/bin/debug.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

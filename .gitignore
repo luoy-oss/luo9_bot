@@ -4,6 +4,10 @@
 *.ttf
 *.html
 
+/templates/
+/python/
+/debug_ui/
+
 # 忽略本地api key文件
 /plugins/ai_chat/config.yaml
 /plugins/pc_status/config.yaml
