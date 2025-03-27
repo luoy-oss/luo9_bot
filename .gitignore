@@ -10,6 +10,14 @@
 /python/
 /debug_ui/
 
+#忽略当前目录下的data目录
+/data/*
+!/data/config.(example).yaml
+
+target/
+
+/windows-app
+
 # 忽略本地api key文件
 /plugins/ai_chat/config.yaml
 /plugins/pc_status/config.yaml
@@ -19,14 +27,6 @@
 # 仅保留default_prompt
 !/plugins/ai_chat/prompts/default_prompts.txt
 !/debug_ui/templates/index.html
-
-
-# 忽略本地config.yaml配置文件，保留样例(example)文件
-/config.yaml
-
-#忽略当前目录下的data目录
-/data
-/windows-app
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
