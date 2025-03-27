@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     
     println!("{:?}", value);
     // 初始化驱动实例并包装在 Arc<Mutex<>> 中以便安全共享
-    let driver = Arc::new(Mutex::new(Driver::new(value.clone())));
+    let driver = Arc::new(Mutex::new(Driver::new(value.clone()).await?));
     
     // 执行驱动的启动流程
     driver.lock().await.run_startup().await?;
@@ -113,9 +113,54 @@ async fn main() -> Result<()> {
 // /// 
 // /// 这个函数处理来自HTTP请求的事件数据，根据事件类型分发到不同的处理函数
 async fn receive_event(
-    State(_state): State<AppState>,
-    Json(_data): Json<JsonValue>,
+    State(state): State<AppState>,
+    Json(data): Json<JsonValue>,
 ) -> Json<JsonValue> {
-    println!("{:?}", _data);
+    // 提取用户ID
+    let user_id = match data["user_id"].as_u64() {
+        Some(id) => id,
+        None => {
+            tracing::error!("无效的用户ID");
+            return Json(json!({"OK": 200}));
+        }
+    };
+    
+    // 检查是否是机器人自身消息，避免自我响应
+    if user_id == state.value.bot_id {
+        tracing::info!("机器人自身消息，进行阻断");
+        return Json(json!({"OK": 200}));
+    }
+    
+    // 根据事件类型分发到对应的处理函数
+    match data["post_type"].as_str() {
+        Some("message") => {
+            // 获取驱动锁
+            let driver_lock = state.driver.lock().await;
+            // 获取插件管理器锁
+            let plugin_manager_arc = driver_lock.plugin_manager();
+            let plugin_manager = plugin_manager_arc.lock().await;
+            
+            // 调用消息处理函数
+            if let Err(e) = luo9_bot::core::handler::message_handle(&state.value, &data, &plugin_manager).await {
+                tracing::error!("处理消息事件失败: {}", e);
+            }
+        }
+        Some("notice") => {
+            // 获取驱动锁
+            let driver_lock = state.driver.lock().await;
+            // 获取插件管理器锁
+            let plugin_manager_arc = driver_lock.plugin_manager();
+            let plugin_manager = plugin_manager_arc.lock().await;
+            
+            // 调用通知处理函数
+            if let Err(e) = luo9_bot::core::handler::notice_handle(&state.value, &data, &plugin_manager).await {
+                tracing::error!("处理通知事件失败: {}", e);
+            }
+        }
+        _ => {
+            tracing::warn!("未知的事件类型: {:?}", data["post_type"]);
+        }
+    }
+    
     Json(json!({"OK": 200}))
 }

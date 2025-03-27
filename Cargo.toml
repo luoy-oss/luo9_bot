@@ -1,11 +1,12 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0"
-edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+version = "1.0.0"
+edition = "2024"
+authors = ["drluo <drluo.top@163.com>"]
 description = "洛玖机器人 - Rust 版本"
 
 [dependencies]
+rayon = "1.8.0"
 # 异步运行时
 tokio = { version = "1.28", features = ["full"] }
 # Web 框架
@@ -19,6 +20,8 @@ serde_yaml = "0.9"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 # HTTP 客户端
+# API 相关依赖
+async-trait = "0.1"
 reqwest = { version = "0.12.15", features = ["json"] }
 # 错误处理
 anyhow = "1.0"
@@ -35,13 +38,20 @@ futures = "0.3"
 libloading = "0.8"  # 动态库加载
 wasmer = "5.0.4"      # WebAssembly
 pyo3 = { version = "0.24.0", features = ["extension-module"] }  # Python 集成
+# 插件系统相关依赖
+lazy_static = "1.4"
+ctor = "0.4.1"
+
+[features]
+plugin_registry = []
 
 [lib]
 name = "luo9_bot"
 path = "src/lib.rs"
+crate-type = ["rlib", "dylib"]
 
 [[bin]]
-name = "luo9_bot"
+name = "luo9_bot_exe"
 path = "src/main.rs"
 
 # [[bin]]

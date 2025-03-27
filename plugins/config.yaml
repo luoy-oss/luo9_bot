@@ -1,0 +1,4 @@
+plugins:
+  - name: example_plugin
+    enable: true
+    priority: 999
