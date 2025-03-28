@@ -1,4 +1,10 @@
 plugins:
+  - name: sky
+    enable: true
+    priority: 20
+  - name: github_card
+    enable: true
+    priority: 30
   - name: example_plugin
     enable: true
-    priority: 999
+    priority: 1

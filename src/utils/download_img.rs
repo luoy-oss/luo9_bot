@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use md5::{Digest, Md5};
 use reqwest;
 use std::fs::{self, File};

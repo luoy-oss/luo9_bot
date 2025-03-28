@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
 use crate::utils::ini_files;
@@ -8,10 +7,7 @@ pub async fn at_check(message: &str, bot_id: &str) -> bool {
 }
 
 pub async fn duplicate_message_check(message: &str, group_id: &str, count: usize) -> bool {
-    // 这里需要实现消息重复检测的逻辑
-    // 由于原Python代码没有完整提供，这里只是一个框架
-    // 实际实现需要存储和检查最近的消息
-    true
+    todo!();
 }
 
 pub async fn register_check(group_id: &str, qq: &str, user_data_path: &str) -> bool {
@@ -43,9 +39,7 @@ pub async fn frozen_check(group_id: &str, qq: &str, admin_frozen_path: &str) -> 
 }
 
 pub async fn interactiveState_check() -> bool {
-    // 这里需要实现交互状态检查的逻辑
-    // 由于原Python代码没有完整提供，这里默认返回true
-    true
+    todo!();
 }
 
 pub async fn data_path_check(group_id: &str, user_id: &str) -> HashMap<String, String> {

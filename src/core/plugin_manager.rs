@@ -228,8 +228,6 @@ impl PluginManager {
             }
         }
         
-        // 不等待任务完成，直接返回
-        // 这样可以实现真正的并行处理
         
         Ok(())
     }
@@ -260,9 +258,6 @@ impl PluginManager {
                 tasks.push(task);
             }
         }
-        
-        // 不等待任务完成，直接返回
-        // 这样可以实现真正的并行处理
         
         Ok(())
     }
@@ -295,10 +290,6 @@ impl PluginManager {
                 tasks.push(task);
             }
         }
-        
-        // 不等待任务完成，直接返回
-        // 这样可以实现真正的并行处理
-        
         Ok(())
     }
 }
