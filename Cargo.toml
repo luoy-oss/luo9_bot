@@ -2,10 +2,11 @@
 name = "luo9_bot"
 version = "1.0.0"
 edition = "2024"
-authors = ["drluo <drluo.top@163.com>"]
+authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人 - Rust 版本"
 
 [dependencies]
+luo9_sdk = "1.0.0"
 rayon = "1.8.0"
 # 异步运行时
 tokio = { version = "1.28", features = ["full"] }

@@ -2,15 +2,10 @@
 //! 
 //! 这个库提供了洛玖机器人的核心功能，包括配置管理、消息处理、插件系统等。
 
-pub mod config;
 pub mod core;
-pub mod api;
-// pub mod napcat;
-// pub mod plugins;
-pub mod utils;
 
 // 重导出常用组件，方便使用
-pub use config::{Config, Value, load_config};
+// pub use config::{Config, Value, load_config};
 pub use core::{Driver, Task};
 
 /// 版本信息

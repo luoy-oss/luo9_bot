@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use tokio::time;
 use anyhow::Result;
 
-use crate::config::Value;
+use luo9_sdk::config::Value;
 use crate::core::Driver;
 
 /// 任务系统

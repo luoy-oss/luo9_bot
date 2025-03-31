@@ -5,16 +5,14 @@
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use async_trait::async_trait;
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_yaml;
 
-use crate::core::plugin_registry;
-
-use crate::config::Value;
-use crate::core::message::{GroupMessage, PrivateMessage};
-
+// 使用新的SDK
+use luo9_sdk::plugin::Plugin;
+use luo9_sdk::message::{GroupMessage, PrivateMessage};
+use luo9_sdk::config::Value;
 
 /// 插件配置结构
 #[derive(Debug, Deserialize)]
@@ -30,44 +28,9 @@ struct PluginEntry {
     priority: i32,
 }
 
-/// 插件元数据结构
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PluginMetadata {
-    pub name: String,
-    pub describe: String,
-    pub author: String,
-    pub version: String,
-    pub message_types: Vec<String>,
-}
-
-/// 插件特性，定义了插件需要实现的方法
-#[async_trait]
-pub trait Plugin: Send + Sync {
-    /// 获取插件元数据
-    fn metadata(&self) -> &PluginMetadata;
-    
-    /// 处理群消息
-    async fn handle_group_message(&self, message: &GroupMessage) -> Result<()> {
-        // 默认实现，如果插件不支持此类消息，则直接返回 Ok
-        Ok(())
-    }
-    
-    /// 处理私聊消息
-    async fn handle_private_message(&self, message: &PrivateMessage) -> Result<()> {
-        // 默认实现，如果插件不支持此类消息，则直接返回 Ok
-        Ok(())
-    }
-    
-    /// 处理群戳一戳事件
-    async fn handle_group_poke(&self, target_id: &str, user_id: &str, group_id: &str) -> Result<()> {
-        // 默认实现，如果插件不支持此类事件，则直接返回 Ok
-        Ok(())
-    }
-}
-
 /// 插件信息结构
 struct PluginInfo {
-    plugin: Arc<Box<dyn Plugin>>, // 修改为 Arc 包装 Box<dyn Plugin>
+    plugin: Arc<Box<dyn Plugin>>,
     priority: i32,
 }
 
@@ -165,37 +128,47 @@ impl PluginManager {
     
     /// 加载单个插件
     async fn load_plugin(&self, name: &str, _priority: i32) -> Result<Box<dyn Plugin>> {
-        // 首先尝试从注册表中创建插件
-        let registry = plugin_registry::PLUGIN_REGISTRY.lock().unwrap();
+        // 使用libloading直接加载插件DLL
+        let plugin_dir = Path::new(&self.config.plugin_path);
+        let plugin_path = plugin_dir.join(name);
         
-        // 如果插件已经注册，直接创建
-        if let Ok(plugin) = registry.create(name, self.config.clone()) {
-            return Ok(plugin);
+        // 构建动态库路径
+        #[cfg(target_os = "windows")]
+        let lib_path = plugin_path.join(format!("{}.dll", name));
+        
+        #[cfg(target_os = "linux")]
+        let lib_path = plugin_path.join(format!("lib{}.so", name));
+        
+        #[cfg(target_os = "macos")]
+        let lib_path = plugin_path.join(format!("lib{}.dylib", name));
+        
+        // 检查动态库是否存在
+        if !lib_path.exists() {
+            return Err(anyhow!("插件动态库不存在: {}", lib_path.display()));
         }
         
-        // 如果插件未注册，尝试加载外部插件
-        drop(registry); // 释放锁
-        
-        let plugin_dir = Path::new(&self.config.plugin_path);
-        
-        // 使用 spawn_blocking 包装可能阻塞的文件系统操作
-        let name_clone = name.to_string();
-        let plugin_dir_clone = plugin_dir.to_path_buf();
+        // 在单独的线程中执行插件加载操作
+        let lib_path_clone = lib_path.to_path_buf();
         let config_clone = self.config.clone();
         
-        // 在单独的线程中执行插件加载操作
         let plugin = tokio::task::spawn_blocking(move || {
-            let mut registry = plugin_registry::PLUGIN_REGISTRY.lock().unwrap();
-            
-            tracing::info!("尝试加载外部插件:{}", name_clone);
-
-            if let Err(e) = registry.load_external_plugin(&plugin_dir_clone, &name_clone) {
-                return Err(e);
+            unsafe {
+                // 加载动态库
+                let lib = libloading::Library::new(&lib_path_clone)?;
+                
+                // 获取插件创建函数
+                let create_plugin: libloading::Symbol<fn(Arc<Value>) -> Result<Box<dyn Plugin>>> = 
+                    lib.get(b"create_plugin")?;
+                
+                // 创建插件实例
+                let plugin = create_plugin(config_clone)?;
+                
+                // 注意：这里有内存泄漏风险，因为我们没有保存lib的引用
+                // 在实际应用中，应该将lib保存在某个地方，防止被提前释放
+                std::mem::forget(lib);
+                
+                Ok::<Box<dyn Plugin>, anyhow::Error>(plugin)
             }
-            tracing::info!("插件加载完成:{}", name_clone);
-            tracing::info!("---------------------------");();
-            // 创建插件实例
-            registry.create(&name_clone, config_clone)
         }).await??;
         
         Ok(plugin)
@@ -219,8 +192,9 @@ impl PluginManager {
                 
                 // 创建一个新任务
                 let task = tokio::spawn(async move {
-                    if let Err(e) = plugin.handle_group_message(&message_clone).await {
-                        tracing::error!("插件 {} 处理群消息失败: {}", plugin.metadata().name, e);
+                    match plugin.handle_group_message(&message_clone).await {
+                        Ok(_) => (),
+                        Err(e) => println!("插件 {} 处理群消息失败: {}", plugin.metadata().name, e),
                     }
                 });
                 
@@ -250,8 +224,9 @@ impl PluginManager {
                 
                 // 创建一个新任务
                 let task = tokio::spawn(async move {
-                    if let Err(e) = plugin.handle_private_message(&message_clone).await {
-                        tracing::error!("插件 {} 处理私聊消息失败: {}", plugin.metadata().name, e);
+                    match plugin.handle_private_message(&message_clone).await {
+                        Ok(_) => (),
+                        Err(e) => println!("插件 {} 处理私聊消息失败: {}", plugin.metadata().name, e),
                     }
                 });
                 
@@ -282,8 +257,9 @@ impl PluginManager {
                 
                 // 创建一个新任务
                 let task = tokio::spawn(async move {
-                    if let Err(e) = plugin.handle_group_poke(&target_id, &user_id, &group_id).await {
-                        tracing::error!("插件 {} 处理戳一戳事件失败: {}", plugin.metadata().name, e);
+                    match plugin.handle_group_poke(&target_id, &user_id, &group_id).await {
+                        Ok(_) => (),
+                        Err(e) => println!("插件 {} 处理群戳一戳事件失败: {}", plugin.metadata().name, e),
                     }
                 });
                 

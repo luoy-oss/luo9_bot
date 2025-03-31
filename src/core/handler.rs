@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use crate::config::Value;
-use crate::core::message::{GroupMessage, PrivateMessage};
+use luo9_sdk::config::Value;
+use luo9_sdk::message::{GroupMessage, PrivateMessage};
 use crate::core::plugin_manager::PluginManager;
 // use crate::api::APIManager;
 
@@ -79,7 +79,6 @@ pub async fn message_handle(_value: &Arc<Value>, data: &JsonValue, plugin_manage
                 group_id: group_id.to_string(),
                 raw_data: data.clone(),
             };
-            
             plugin_manager.handle_group_message(&group_message).await?;
         }
         _ => {

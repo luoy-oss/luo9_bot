@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Mutex;
-use crate::config::Value;
+use luo9_sdk::config::Value;
 use crate::core::plugin_manager::PluginManager;
 
 /// 机器人驱动
