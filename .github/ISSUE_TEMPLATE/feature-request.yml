@@ -1,0 +1,55 @@
+name: 功能建议
+description: 为 luo9Bot 提出新功能或改进建议
+title: "[FEATURE] "
+labels: ["enhancement", "discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        📢 请先确认：
+        * 已搜索现有 issues 且未找到类似建议
+        * 建议需符合项目核心定位（基于 luo9SDK 的 QQ 机器人开发）
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: 功能描述
+      description: 清晰说明你希望实现的特性或改进方向
+      placeholder: 
+    validations:
+      required: true
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: 使用场景
+      description: 说明该功能在什么情况下会被使用（至少提供 2 个典型场景）
+      placeholder: 
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: 解决方案建议
+      description: 如果你有技术实现思路请在此说明（可选）
+      placeholder: 
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 是否考虑过其他实现方式？现有功能是否部分满足需求？（可选）
+      placeholder: 
+  - type: textarea
+    id: visual-design
+    attributes:
+      label: 界面设计
+      description: 如需新增交互界面，请描述设计思路（推荐使用外链图片说明）
+      placeholder: 
+  - type: checkboxes
+    id: agreements
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已确认该建议未被现有 issues 覆盖
+          required: true
+        - label: 我同意该功能提案遵循 [GPL-3.0 协议](https://www.gnu.org/licenses/gpl-3.0.en.html)
+          required: true
+        - label: 愿意参与该功能的测试验证（可选）
