@@ -1,0 +1,93 @@
+name: 问题反馈
+description: 报告 luo9Bot 的异常行为
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认：
+        * 已搜索现有 issues 且未找到重复问题
+        * 若为功能建议请使用 Feature Request 模板
+  - type: input
+    id: system-version
+    attributes:
+      label: 操作系统版本
+      description: 运行 luo9Bot 的系统环境
+      placeholder: Windows 11 22H2
+    validations:
+      required: true
+  - type: input
+    id: luo9sdk-version
+    attributes:
+      label: luo9SDK 版本
+      description: 使用的 SDK 版本号
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: luo9bot-version
+    attributes:
+      label: luo9Bot 版本
+      description: 当前运行的机器人版本号
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: bot-config
+    attributes:
+      label: 机器人配置
+      description: 关键配置路径或参数（如：config.yaml 路径/启用的特殊模块）
+      placeholder: H:\luo9Bot\config.yaml / 启用了语音模块
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 请清晰描述遇到的问题现象
+      placeholder: 当执行...命令时，机器人出现...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 重现步骤
+      description: 触发问题的具体操作流程
+      placeholder: 
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 预期行为
+      description: 你期望的正常表现是什么？
+      placeholder: 
+    validations:
+      required: true
+  - type: textarea
+    id: bot-log
+    attributes:
+      label: 机器人日志
+      description: 相关错误日志
+      render: shell
+  - type: textarea
+    id: other-logs
+    attributes:
+      label: 其他日志
+      description: 相关第三方组件日志（如：数据库/API 调用日志）
+      render: shell
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: 补充信息
+      description: 截图链接、异常报文等附加信息（图片请使用外链）
+      placeholder: 截图链接：https://example.com/error.png
+  - type: checkboxes
+    id: agreement
+    attributes:
+      label: 提交确认
+      description: 请勾选以下确认项
+      options:
+        - label: 我已确认此问题未在现有 issues 中被报告
+          required: true
