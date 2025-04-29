@@ -1,0 +1,25 @@
+[package]
+name = "luo9_plugin_manager"
+version = "0.1.0"
+edition = "2021"
+authors = ["drluo"]
+description = "Luo9机器人插件管理系统"
+
+[lib]
+name = "luo9_plugin_manager"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+futures = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

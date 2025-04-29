@@ -73,7 +73,7 @@ async def message_handle(message_objects):
 async def poke_handle(target_id, user_id, group_id=''):
     # 群戳一戳
     if group_id != '':
-        await plugin_manager.handle_group_poke(target_id, user_id, group_id)
+        await plugin_manager.handle_group_poke(str(target_id), str(user_id), str(group_id))
     # 私聊戳一戳
     else:
         pass
