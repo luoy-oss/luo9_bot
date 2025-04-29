@@ -13,12 +13,14 @@ class Driver:
         self._shutdown_callbacks.append(func)
         return func
     
-    async def run_startup(self):
+    def run_startup(self):
+        import asyncio
         for callback in self._startup_callbacks:
-            await callback()
+            asyncio.run(callback())
 
-    async def run_shutdown(self):
-            for callback in self._shutdown_callbacks:
-                await callback()
+    def run_shutdown(self):
+        import asyncio
+        for callback in self._shutdown_callbacks:
+            asyncio.run(callback())
 
 driver = Driver()

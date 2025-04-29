@@ -3,6 +3,7 @@ load_config('config.yaml')
 value = get_value()
 
 #main.py
+import os
 import signal
 import json
 import asyncio
@@ -34,17 +35,15 @@ def run_flask():
     from waitress import serve
     serve(app, host=value.ncc_host, port=value.ncc_port)
 
-async def startup():
-    await driver.run_startup()
-
-async def shutdown():
-    await driver.run_shutdown()
-
 def signal_handler(sig, frame):
-    asyncio.run(shutdown())
-    print('\r\n用户终止')
-    exit(0)
-
+    print('>>>>>>> 收到终止信号，关闭程序 <<<<<<<')
+    driver.run_shutdown()
+    executor.shutdown(wait=False)
+    app.do_teardown_appcontext()
+    import time
+    time.sleep(1)
+    os.kill(os.getpid(), signal.SIGTERM)
+    
 from luo9 import get_task
 task = get_task()
 
@@ -52,8 +51,8 @@ async def run_task():
     await task.start()
 
 if __name__ == '__main__':
-    asyncio.run(startup())
-    # asyncio.run(run_task())
+    driver.run_startup()
+    
     signal.signal(signal.SIGINT, signal_handler)
     with ThreadPoolExecutor() as executor:
         executor.submit(run_flask)
