@@ -70,10 +70,17 @@ async def message_handle(message_objects):
         pass
 
 # 戳一戳消息处理
-async def poke_handle(target_id, user_id, group_id=''):
+async def poke_handle(target_id: str, user_id: str, group_id=''):
+    """
+    处理群聊戳一戳事件
+    Args:
+        target_id: 被戳的目标ID
+        user_id: 发起戳一戳的用户ID
+        group_id: 群组ID
+    """
     # 群戳一戳
     if group_id != '':
-        await plugin_manager.handle_group_poke(str(target_id), str(user_id), str(group_id))
+        await plugin_manager.handle_group_poke(target_id, user_id, group_id)
     # 私聊戳一戳
     else:
         pass

@@ -9,16 +9,17 @@ class Value:
             self.data_path = config['PATH'] + '/data'
             self.plugin_path = config['PATH'] + '/plugins'
             self.core_path = config['PATH'] + '/luo9'
+            self.log_path = config['PATH'] + '/data/logs'
             
-            self.bot_id = config['bot_id']
-            self.master = config['master']
+            self.bot_id = str(config['bot_id'])
+            self.master = str(config['master'])
 
-            self.group_list = config['group_list']
+            self.group_list = list(map(str, config['group_list']))
 
-            self.B站直播检测推送列表 = config['B站直播检测推送列表']
-            self.节日检测推送列表 = config['节日检测推送列表']
+            self.B站直播检测推送列表 = list(map(str, config['B站直播检测推送列表']))
+            self.节日检测推送列表 = list(map(str, config['节日检测推送列表']))
 
-            self.土豆直播间ID = config['土豆直播间ID']
+            self.土豆直播间ID = str(config['土豆直播间ID'])
 
             self.AI语音音色 = config['AI语音音色']
 

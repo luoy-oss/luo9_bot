@@ -7,20 +7,25 @@ import os
 import signal
 import json
 import asyncio
+from utils import data_encode
 
 from luo9 import get_driver
-from flask import Flask, request
+from flask import Flask, request, current_app
 from luo9.handle import message_handle, notice_handle
 from concurrent.futures import ThreadPoolExecutor
+from logger import Luo9Log
+log = Luo9Log(__name__)
 
 driver = get_driver()
 app = Flask(__name__)
 
+
 @app.route('/', methods=['POST'])
 async def receive_event():
-    data = request.json
+    data = data_encode(request.json)
+    
     if data['user_id'] == value.bot_id:
-        print('机器人自身消息，进行阻断')
+        log.info('机器人自身消息，进行阻断')
         return json.dumps({"OK": 200})
     # 消息事件
     if data['post_type'] == 'message':
@@ -33,10 +38,11 @@ async def receive_event():
 
 def run_flask():
     from waitress import serve
+    log.info(f'>>>>>>> 启动Flask服务，监听 {value.ncc_host}:{value.ncc_port} <<<<<<<')
     serve(app, host=value.ncc_host, port=value.ncc_port)
 
 def signal_handler(sig, frame):
-    print('>>>>>>> 收到终止信号，关闭程序 <<<<<<<')
+    log.info('>>>>>>> 收到终止信号，关闭程序 <<<<<<<')
     driver.run_shutdown()
     executor.shutdown(wait=False)
     app.do_teardown_appcontext()

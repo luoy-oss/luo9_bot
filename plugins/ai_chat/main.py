@@ -1,9 +1,9 @@
-import logging
 import os
 import yaml
 import asyncio
 import time
 import warnings
+from logger import Luo9Log
 from openai import OpenAI
 from luo9.api_manager import luo9
 from luo9.message import GroupMessage
@@ -99,12 +99,7 @@ except FileNotFoundError:
     with open(file_path, "r", encoding="utf-8") as file:
         prompt_content = file.read()
 
-# prompt_content += add_prompts
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = Luo9Log(__name__)
 
 user_queues = {}  # 用户消息
 lock = asyncio.Lock()

@@ -2,6 +2,9 @@ import requests
 from config import get_value
 value = get_value()
 
+from logger import Luo9Log
+log = Luo9Log(__name__)
+
 async def send_group_message(group_id, message):
     url = f"{value.base_url}/send_group_msg"
     params = {
@@ -14,10 +17,9 @@ async def send_group_message(group_id, message):
     # response = requests.post(url, data = params)
 
     if response.status_code == 200:
-        print("Message sent successfully")
+        log.info(["Message sent successfully", f"➣ {message}"])
     else:
-        print("Failed to send message")
-        print(response.status_code, response.text)
+        log.warning(["Failed to send message", response.status_code, response.text])
 
 async def send_group_ai_record(group_id, character, text):
     url = f"{value.base_url}/send_group_ai_record"
@@ -30,47 +32,46 @@ async def send_group_ai_record(group_id, character, text):
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
-        print("AI record sent successfully")
+        log.info("AI record sent successfully")
     else:
-        print("Failed to send AI record")
-        print(response.status_code, response.text)
+        log.warning(["Failed to send AI record", response.status_code, response.text])
         
 
 async def send_group_at(group_id, qq):
     url = f"{value.base_url}/send_group_msg"
+    message = ['[CQ:at,qq={qq}]'.format(qq=qq)]
     params = {
         "group_id": group_id,
-        "message": ['[CQ:at,qq={qq}]'.format(qq=qq)],
+        "message": message,
         "access_token": value.access_token
     }
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
-        print("Message sent successfully")
+        log.info(["Message sent successfully", f"➣ {message}"])
     else:
-        print("Failed to send message")
-        print(response.status_code, response.text)
+        log.warning(["Failed to send message", response.status_code, response.text])
 
 async def send_group_image(group_id, file):
     url = f"{value.base_url}/send_group_msg"
+    message = ['[CQ:image,file={file}]'.format(file=file)]
     params = {
         "group_id": group_id,
-        "message": ['[CQ:image,file={file}]'.format(file=file)],
+        "message": message,
         "access_token": value.access_token
     }
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
-        print("Message sent successfully")
+        log.info(["Image sent successfully", f"➣ {message}"])
     else:
-        print("Failed to send message")
-        print(response.status_code, response.text)
+        log.warning(["Failed to send image", response.status_code, response.text])
 
-async def upload_group_file(group_id, file, name, folder_id):
+async def upload_group_file(group_id, uploadfile, name, folder_id):
     url = f"{value.base_url}/upload_group_file"
     params = {
         "group_id": group_id,
-        "file": file,
+        "file": uploadfile,
         "name": name,
         "folder_id": folder_id,
         "access_token": value.access_token
@@ -78,10 +79,9 @@ async def upload_group_file(group_id, file, name, folder_id):
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
-        print("File uploaded successfully")
+        log.info(["File uploaded successfully", f"➣ {uploadfile}"])
     else:
-        print("Failed to upload file")
-        print(response.status_code, response.text)
+        log.warning(["Failed to upload file", response.status_code, response.text])
 
 async def send_group_poke(group_id, user_id):
     if user_id != value.bot_id:
@@ -91,15 +91,12 @@ async def send_group_poke(group_id, user_id):
             "user_id": user_id,
             "access_token": value.access_token
         }
-        print(params)
         response = requests.get(url, params=params)
-        print(response.json())
 
         if response.status_code == 200:
-            print("poke sent successfully")
+            log.info("Poke sent successfully")
         else:
-            print("Failed to send poke")
-            print(response.status_code, response.text)
+            log.warning(["Failed to send poke", response.status_code, response.text])
 
 async def get_ai_radio_list(group_id, chat_type):
     url = f"{value.base_url}/get_ai_characters"
@@ -128,11 +125,9 @@ async def send_group_ai_radio(group_id, character, text):
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
-        print("AI radio sent successfully")
+        log.info("AI radio sent successfully")
     else:
-        print("Failed to send AI radio")
-        print(response.status_code, response.text)
-
+        log.warning(["Failed to send AI radio", response.status_code, response.text])
 
 
 async def get_group_files_by_folder(group_id, folder_id, file_count):
@@ -145,11 +140,10 @@ async def get_group_files_by_folder(group_id, folder_id, file_count):
     }
     response = requests.get(url, params=params)
     if response.status_code == 200:
-        print("File list retrieved successfully")
+        log.info("File list retrieved successfully")
         return response.json()
     else:
-        print("Failed to retrieve file list")
-        print(response.status_code, response.text)
+        log.warning(["Failed to retrieve file list", response.status_code, response.text])
         return None
 
 async def get_group_root_files(group_id):
@@ -160,9 +154,8 @@ async def get_group_root_files(group_id):
     }
     response = requests.get(url, params=params)
     if response.status_code == 200:
-        print("File list retrieved successfully")
+        log.info("File list retrieved successfully")
         return response.json()
     else:
-        print("Failed to retrieve file list")
-        print(response.status_code, response.text)
+        log.warning(["Failed to retrieve file list", response.status_code, response.text])
         return None
