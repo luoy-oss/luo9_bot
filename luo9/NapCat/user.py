@@ -2,6 +2,10 @@ import requests
 from config import get_value
 value = get_value()
 
+from logger import Luo9Log
+log = Luo9Log(__name__)
+
+
 # 发送群聊消息的函数
 async def send_private_msg(user_id, message):
     url = f"{value.base_url}/send_private_msg"
@@ -15,7 +19,8 @@ async def send_private_msg(user_id, message):
     # response = requests.post(url, data = params)
 
     if response.status_code == 200:
-        print("Message sent successfully")
+        log.info("Message sent successfully")
     else:
-        print("Failed to send message")
-        print(response.status_code, response.text)
+        log.warning("Failed to send message")
+        log.warning(response.status_code, response.text)
+ 
