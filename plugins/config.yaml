@@ -31,4 +31,7 @@ plugins:
   - name: JMComic
     priority: 30
     enable: true
+  - name: deltaforce
+    priority: 50
+    enable: true
     
