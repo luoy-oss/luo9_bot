@@ -34,4 +34,7 @@ plugins:
   - name: deltaforce
     priority: 50
     enable: true
+  - name: blog-link-monitoring
+    priority: 999
+    enable: true
     

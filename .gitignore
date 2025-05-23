@@ -7,6 +7,7 @@
 # 忽略本地api key文件
 /plugins/ai_chat/config.yaml
 /plugins/pc_status/config.yaml
+/plugins/blog-link-monitoring/config.yaml
 /plugins/JMComic/config.yml
 # 忽略本地prompt
 /plugins/ai_chat/prompts/*

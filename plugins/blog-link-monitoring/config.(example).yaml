@@ -1,0 +1,9 @@
+monitoring:
+  # 填写api url
+  api_url:  https://localhost:3000
+  # 在有友链仓库的前提下，将{user_name}改为你的用户名，{repo_name}改为仓库名
+  friend_link_url: https://api.github.com/repos/{user_name}/{repo_name}/issues?sort=created&direction=asc&state=all&page=1&per_page=100&labels=active
+  # 额外要监测的url列表，或者你可以不配置friend_link_url，只在列表中进行配置
+  lists: ['https://www.drluo.top']
+  # 监测间隔
+  minutes: 5
