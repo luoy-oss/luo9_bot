@@ -7,11 +7,12 @@
 # 忽略本地api key文件
 /plugins/ai_chat/config.yaml
 /plugins/pc_status/config.yaml
-/plugins/blog-link-monitoring/config.yaml
+/plugins/blog-link-monitoring/*
 /plugins/JMComic/config.yml
 # 忽略本地prompt
 /plugins/ai_chat/prompts/*
 # 仅保留default_prompt
+!/plugins/blog-link-monitoring/main.py
 !/plugins/ai_chat/prompts/default_prompts.txt
 !/debug_ui/templates/index.html
 
