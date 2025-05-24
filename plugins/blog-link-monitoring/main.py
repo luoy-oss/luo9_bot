@@ -57,10 +57,7 @@ async def monitoring_api():
     else:
         friend_link_url = ''
 
-    if __config.get('lists'):
-        url_list = __config['lists']
-    else:
-        url_list = []
+    url_list = list(__config.get('lists', []))
 
     if friend_link_url:
         params = {}
