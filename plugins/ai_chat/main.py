@@ -261,7 +261,12 @@ async def call_back():
 @Timeout(wait=8, on_timeout=call_back)
 async def active_message(message: GroupMessage):
     global message_package
-    curtime = time.strftime("%Y年%m月%d日%H时%M分%S秒", time.localtime(message.time))
+    if isinstance(message.time, str):
+        timestamp = int(message.time)
+    else:
+        timestamp = message.time
+
+    curtime = time.strftime("%Y年%m月%d日%H时%M分%S秒", time.localtime(timestamp))
     message_package['message'] += f"{message.content}\n"
     message_package['group_id'] = str(message.group_id)
     message_package['user_id'] = str(message.user_id)
