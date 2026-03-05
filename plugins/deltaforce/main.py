@@ -1,7 +1,7 @@
 import os
 import asyncio
 from luo9.api_manager import luo9
-from luo9.message import GroupMessage
+from luo9.message import GroupMessage, PrivateMessage
 from utils.message_limit import MessageLimit
 from config import get_value
 from logger import Luo9Log
@@ -62,8 +62,9 @@ async def group_handle(message: GroupMessage):
             help_msg = get_query_types_help()
             await luo9.send_group_message(group_id, help_msg)
 
-async def private_handle(message, user_id):
-    message_content = message
+async def private_handle(message: PrivateMessage):
+    message_content = message.content
+    user_id = message.user_id
     
     if message_content == "三角洲登录" and deltaforce_limit.check(30):
         deltaforce_limit.handle()
