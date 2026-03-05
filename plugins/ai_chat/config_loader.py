@@ -2,7 +2,7 @@ import os
 import warnings
 import yaml
 from logger import Luo9Log
-from openai import AsyncOpenAI
+from openai import OpenAI
 from config import get_value
 
 value = get_value()
@@ -23,7 +23,7 @@ def load_config(path, file_name):
 
 ai_config = load_config(value.plugin_path + "/ai_chat", "config.yaml")
 
-client = AsyncOpenAI(
+client = OpenAI(
     api_key=ai_config["DEEPSEEK_API_KEY"],
     base_url=ai_config["DEEPSEEK_BASE_URL"],
     default_headers={"Content-Type": "application/json"},

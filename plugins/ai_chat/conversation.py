@@ -35,7 +35,7 @@ async def get_deepseek_response(message, curtime, user_id):
                 *state.chat_contexts[user_id][-MAX_GROUPS * 2 :],
             ]
 
-            response = await client.chat.completions.create(
+            response = client.chat.completions.create(
                 model=ai_config["model"],
                 messages=messages,
                 frequency_penalty=FREQUENCY_PENALTY,
@@ -45,6 +45,9 @@ async def get_deepseek_response(message, curtime, user_id):
                 max_tokens=MAX_TOKEN,
                 stream=False,
             )
+
+            
+
         except Exception as api_error:
             logger.error(f"API调用失败: {str(api_error)}")
             return "尝试...失败"
@@ -147,7 +150,7 @@ async def restart_conversation(group_id, user_id):
                 )
 
 async def message_reply(message, curtime, group_id, user_id):
-    print(message)
+    print(f"处理消息 - 群组: {group_id}, 用户: {user_id}, 消息: {message}")
     reply = await get_deepseek_response(message, curtime, user_id)
     if reply:
         if "</think>" in reply:
@@ -181,7 +184,7 @@ async def call_back():
     }
     await message_reply(message, curtime, group_id, user_id)
 
-@Timeout(wait=8, on_timeout=call_back)
+@Timeout(wait=6, on_timeout=call_back)
 async def active_message(message):
     if isinstance(message.time, str):
         timestamp = int(message.time)
