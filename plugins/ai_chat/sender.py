@@ -18,14 +18,17 @@ def calculate_delay(message_list):
 
     return delays
 
-async def message_sender(group_id, message_list):
+async def message_sender(group_id, user_id, message_list):
     delays = calculate_delay(message_list)
     for index, message in enumerate(message_list):
-        await luo9.send_group_message(group_id, message)
+        if group_id != "":
+            await luo9.send_group_message(group_id, message)
+        else:
+            await luo9.send_private_msg(user_id, message)
         if index < len(message_list) - 1:
             time.sleep(delays[index])
 
     state.sender_started = False
 
-async def start_message_sender(group_id, message_list):
-    asyncio.create_task(message_sender(group_id, message_list))
+async def start_message_sender(group_id, user_id, message_list):
+    asyncio.create_task(message_sender(group_id, user_id, message_list))

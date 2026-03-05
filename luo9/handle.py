@@ -57,17 +57,18 @@ value = get_value()
 }
 '''
 __message = GroupMessage()
+__private_message = PrivateMessage()
 
 # 群消息，私聊消息处理
 # @Record
 async def message_handle(message_objects):
     if message_objects['message_type'] == 'group':
-        global message
         __message.handle(message_objects)
         
         await plugin_manager.handle_group_message(__message)
     if message_objects['message_type'] == 'private':
-        pass
+        __private_message.handle(message_objects)
+        await plugin_manager.handle_private_message(__private_message)
 
 # 戳一戳消息处理
 async def poke_handle(target_id: str, user_id: str, group_id=''):
