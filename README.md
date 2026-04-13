@@ -2,6 +2,17 @@
 
 # 洛玖机器人
 
+**python版本已经不再使用，当前项目全权转移到了Rust**
+
+如果您依旧希望使用python进行插件开发，请查阅：
+
+https://github.com/luo9-bot/plugin-python-example
+
+https://github.com/luo9-bot/luo9_sdk_pyton
+
+
+---
+
 _✨ 推荐使用python 3.10.12 ✨_
 
 <a href="https://raw.githubusercontent.com/luoy-oss/luo9_bot/main/LICENSE">
