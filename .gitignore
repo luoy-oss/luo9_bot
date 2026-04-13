@@ -1,0 +1,10 @@
+target/
+config/*.toml
+plugins/
+
+!config/example.toml
+
+build.bat
+build.rs
+
+Cargo.lock

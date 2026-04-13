@@ -1,0 +1,19 @@
+[napcat]
+ws_client_host = "0.0.0.0"
+ws_client_port = 7000
+
+ws_server_host = "127.0.0.1"
+ws_server_port = 3000
+
+timeout_seconds = 10
+
+token="token"
+
+[logging]
+level = "info"
+
+[plugins]
+enabled = false
+plugin_dir = "H:/github/luo9_bot/rust/plugins/"
+auto_load = true
+plugins = []
