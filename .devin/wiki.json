@@ -1,0 +1,51 @@
+{
+  "repo_notes": [
+    {
+      "content": "Luo9 Bot is a high-performance QQ chatbot framework built with Rust, utilizing NapCat as the messaging backend. It features a modular plugin architecture, asynchronous runtime with tokio, and comprehensive message/event handling systems.",
+      "author": "System Analysis"
+    },
+    {
+      "content": "Key technologies: Rust, tokio (async runtime), NapCat (QQ protocol), WebSocket communication, libloading (dynamic plugin loading), tracing (structured logging), serde (serialization)",
+      "author": "Technical Stack"
+    },
+    {
+      "content": "Project structure includes: src/main.rs (entry point), src/lib.rs (core library), src/config.rs (configuration), src/connection/ (WebSocket handling), src/handler/ (message/event/notice processing), src/plugin.rs (plugin system), src/utils/ (utilities and logging)",
+      "author": "Project Structure"
+    },
+    {
+      "content": "Core functionality: 1. Configuration management with TOML files 2. WebSocket connection to NapCat backend 3. Message type system (PostType, MsgType, SubType) 4. Plugin system with dynamic library loading 5. Async message processing pipeline 6. Structured logging with tracing",
+      "author": "Core Features"
+    },
+    {
+      "content": "Plugin system details: Uses libloading for dynamic library loading, supports both Rust and C++ plugins, provides luo9_sdk for plugin development, includes plugin configuration and prioritization",
+      "author": "Plugin Architecture"
+    },
+    {
+      "content": "Message flow: WebSocket reception → JSON parsing → type identification → handler dispatch (message/event/notice) → plugin processing → response sending",
+      "author": "Message Processing"
+    },
+    {
+      "content": "Development workflow: 1. Setup Rust toolchain 2. Configure NapCat connection 3. Build with cargo 4. Test with sample plugins 5. Deploy as system service",
+      "author": "Development Guide"
+    },
+    {
+      "content": "Important modules to document: LNContext (main context), LNConfig (configuration), Receiver/Sender (WebSocket), Message/Event/Notice handlers, Plugin loader, Error types, Utility functions",
+      "author": "Documentation Focus"
+    },
+    {
+      "content": "Target audience: QQ bot developers, Rust programmers, plugin developers, system administrators. Documentation should cover: getting started, architecture, API reference, plugin development, deployment, troubleshooting",
+      "author": "Audience & Scope"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the Luo9 Bot framework, its architecture, features, and use cases",
+      "page_notes": [
+        {
+          "content": "This is the main overview page that should provide a high-level introduction to the project"
+        }
+      ]
+    }
+  ]
+}
