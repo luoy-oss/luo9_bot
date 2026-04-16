@@ -25,7 +25,7 @@ futures-util = "0.3.32"
 # 序列化
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-toml = "1.1.0+spec-1.1.0"
+toml = "1.1.2"
 
 # 日志
 tracing = "0.1.44"
@@ -35,12 +35,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 anyhow = "1.0.102"
 thiserror = "2.0.18"
 chrono = "0.4.44"
-libloading = "0.8.3"
-
-# 插件系统依赖
-[target.'cfg(feature = "plugins")'.dependencies]
-libloading = "0.8.3"  # 动态库加载
-parking_lot = "0.12.3"  # 线程安全锁
+libloading = "0.9.0"
+lazy_static = "1.5.0"
 
 
 [lib]

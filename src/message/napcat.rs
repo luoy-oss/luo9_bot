@@ -36,7 +36,7 @@ use tokio::runtime::Handle;
 */
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MsgType {
     Private,
     Group,

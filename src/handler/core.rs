@@ -1,5 +1,5 @@
 use serde_json::Value;
-use crate::handler::{message, event, notice};
+use crate::handler;
 use crate::error::{Result, LNErr};
 use crate::event::PostType;
 use crate::message::Message;
@@ -22,15 +22,15 @@ pub fn handle(data: Value) -> Result<()>{
     match post_type {
         PostType::MetaEvent => {
             let meta_event: MetaEvent = MetaEvent::new(data.clone());
-            event::handle_event(meta_event)?;
+            handler::event::handle_event(meta_event)?;
         },
         PostType::Message => {
             let message: Message = Message::new(data.clone());
-            message::handle_message(message)?;
+            handler::message::handle_message(message)?;
         },
         PostType::Notice => {
             let notice: Notice = Notice::new(data.clone());
-            notice::handle_notice(notice)?;
+            handler::notice::handle_notice(notice)?;
         },
         _ => {
         }

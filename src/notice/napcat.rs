@@ -2,7 +2,7 @@ use serde::Deserialize;
 use crate::sub_type::SubType;
 use serde_json::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NoticeType {
     FriendAdd,      // 好友添加
     FriendRecall,   // 私聊消息撤回
@@ -22,7 +22,7 @@ pub enum NoticeType {
     Unknown,        // 未知通知类型
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Notice {
     pub notice_type: NoticeType,
     pub sub_type: SubType,

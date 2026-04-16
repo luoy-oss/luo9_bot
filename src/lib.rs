@@ -19,7 +19,7 @@ use config::LNConfig;
 use error::Result;
 use tracing::info;
 
-use plugin::load_all_plugins;
+use plugin as Plugin;
 
 
 /// 应用上下文
@@ -64,7 +64,9 @@ impl LNContext {
             info!("全局 Sender 实例已初始化");
         }
         
-        load_all_plugins(&config.plugins);
+        let _ = Plugin::initialize(&config.plugins.plugin_dir).await;
+
+        // Plugin::load_all_plugins(&config.plugins);
 
         info!("应用初始化完成");
         
