@@ -5,6 +5,8 @@ pub mod publisher;
 pub mod manager;
 pub mod loader;
 pub mod data;
+pub mod task_bus;
+pub mod task;
 
 // 重新导出常用类型和函数
 pub use bus::{publish, subscribe, get_bus_sender, stats as bus_stats};
@@ -39,7 +41,10 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
     
     // 初始化全局管理器
     init_global_manager(plugins).await;
-    
+
+    // 启动 task 总线接收器
+    task::start_task_receiver();
+
     info!("插件系统初始化完成");
     Ok(())
 }
