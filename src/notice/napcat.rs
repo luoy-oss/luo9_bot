@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 use crate::sub_type::SubType;
 use serde_json::Value;
 
@@ -18,11 +18,30 @@ pub enum NoticeType {
     Essence,        // 群聊设精
 
     Notify,         // 一些通知，需进一步通过SubType确认
-    
+
     Unknown,        // 未知通知类型
 }
 
-#[derive(Debug, Clone)]
+impl Serialize for NoticeType {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            NoticeType::FriendAdd => serializer.serialize_str("friend_add"),
+            NoticeType::FriendRecall => serializer.serialize_str("friend_recall"),
+            NoticeType::GroupAdmin => serializer.serialize_str("group_admin"),
+            NoticeType::GroupBan => serializer.serialize_str("group_ban"),
+            NoticeType::GroupIncrease => serializer.serialize_str("group_increase"),
+            NoticeType::GroupDecrease => serializer.serialize_str("group_decrease"),
+            NoticeType::GroupCard => serializer.serialize_str("group_card"),
+            NoticeType::GroupRecall => serializer.serialize_str("group_recall"),
+            NoticeType::GroupUpload => serializer.serialize_str("group_upload"),
+            NoticeType::Essence => serializer.serialize_str("essence"),
+            NoticeType::Notify => serializer.serialize_str("notify"),
+            NoticeType::Unknown => serializer.serialize_str("unknown"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct Notice {
     pub notice_type: NoticeType,
     pub sub_type: SubType,

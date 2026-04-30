@@ -1,13 +1,14 @@
 // src/plugin/data.rs
 // 插件数据类型定义
 
+use serde::Serialize;
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
 
 /// 插件数据类型枚举
 /// 统一所有可能传递给插件的数据类型
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum PluginData {
     /// 消息类型
     Message(Message),

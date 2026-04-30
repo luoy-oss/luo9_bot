@@ -2,10 +2,8 @@
 // luo9_task 总线接收与处理模块
 
 use tracing::{debug, error, info};
-use super::task_bus::{Bus, BusError};
+use super::bus::{Bus, BusError, TOPIC_TASK};
 
-const TASK_TOPIC: &str = "luo9_task";
-const BUS_CAPACITY: usize = 1024;
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// 从 luo9_task 总线接收到的任务请求
@@ -24,13 +22,8 @@ pub fn start_task_receiver() {
 }
 
 async fn run_receiver() -> Result<(), BusError> {
-    Bus::init(BUS_CAPACITY).map_err(|e| {
-        error!("luo9_bus_init 失败: {:?}", e);
-        e
-    })?;
-
-    let topic = Bus::topic(TASK_TOPIC);
-    info!("task 总线接收器已启动，监听 topic: {}", TASK_TOPIC);
+    let topic = Bus::topic(TOPIC_TASK);
+    info!("task 总线接收器已启动，监听 topic: {}", TOPIC_TASK);
 
     loop {
         match topic.pop() {
