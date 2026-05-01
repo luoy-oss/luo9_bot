@@ -1,6 +1,7 @@
 target/
 config/*.toml
 plugins/
+data/
 
 !config/example.toml
 
