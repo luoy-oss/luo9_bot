@@ -33,6 +33,10 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
         return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Bus init failed")));
     }
 
+    // 先启动总线接收器，再加载插件，避免插件发布消息时接收器尚未订阅
+    task::start_task_receiver();
+    sender::start_send_receiver();
+
     // 加载插件（加载后自动启动各插件的 plugin_main 线程）
     let loader = PluginLoader::new(plugins_dir);
     let infos = loader.load_all()?;
@@ -41,12 +45,6 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
 
     // 注册插件信息到全局管理器
     init_global_manager(infos).await;
-
-    // 启动 task 总线接收器
-    task::start_task_receiver();
-
-    // 启动消息发送接收器
-    sender::start_send_receiver();
 
     info!("插件系统初始化完成");
     Ok(())

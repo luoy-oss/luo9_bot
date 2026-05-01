@@ -10,6 +10,7 @@ use super::data::PluginData;
 pub const TOPIC_MESSAGE: &str = "luo9_message";
 pub const TOPIC_META_EVENT: &str = "luo9_meta_event";
 pub const TOPIC_NOTICE: &str = "luo9_notice";
+pub const TOPIC_TASK_MISO: &str = "luo9_task_miso";
 pub const TOPIC_TASK: &str = "luo9_task";
 pub const TOPIC_SEND: &str = "luo9_send";
 
