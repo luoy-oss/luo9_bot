@@ -1,16 +1,13 @@
 // src/plugin/sender.rs
 // 基于 bus 总线的消息发送接收器
-// 从 luo9_send topic pop 请求，调用 Sender 实际发送
+// 从 luo9_send topic 阻塞等待请求，调用 Sender 实际发送
 
 use serde::Deserialize;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
-use super::bus::Bus;
+use super::bus;
 use crate::connection::Sender;
-
-const TOPIC_SEND: &str = "luo9_send";
-const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 
 // ── 请求结构（与 SDK 端一致）──────────────────────────────────
 
@@ -40,26 +37,10 @@ pub async fn init_sender(sender: Sender) {
 // ── 接收器 ─────────────────────────────────────────────────────
 
 pub fn start_send_receiver() {
-    tokio::spawn(async {
-        let topic = Bus::topic(TOPIC_SEND);
-        info!("消息发送接收器已启动，监听 topic: {}", TOPIC_SEND);
-
-        loop {
-            match topic.pop() {
-                Some(json) => {
-                    match serde_json::from_str::<SendRequest>(&json) {
-                        Ok(req) => {
-                            handle_request(req).await;
-                        }
-                        Err(e) => {
-                            error!("解析发送请求失败: {}", e);
-                        }
-                    }
-                }
-                None => {
-                    tokio::time::sleep(POLL_INTERVAL).await;
-                }
-            }
+    bus::start_topic_receiver(bus::TOPIC_SEND, |json| async move {
+        match serde_json::from_str::<SendRequest>(&json) {
+            Ok(req) => handle_request(req).await,
+            Err(e) => error!("解析发送请求失败: {}", e),
         }
     });
 }

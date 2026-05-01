@@ -1,10 +1,8 @@
 // src/plugin/task.rs
 // luo9_task 总线接收与处理模块
 
-use tracing::{debug, error, info};
-use super::bus::{Bus, BusError, TOPIC_TASK};
-
-const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+use tracing::debug;
+use super::bus;
 
 /// 从 luo9_task 总线接收到的任务请求
 #[derive(Debug)]
@@ -14,29 +12,11 @@ pub struct TaskRequest {
 
 /// 启动 task 总线接收器
 pub fn start_task_receiver() {
-    tokio::spawn(async {
-        if let Err(e) = run_receiver().await {
-            error!("task 总线接收器启动失败: {:?}", e);
-        }
+    bus::start_topic_receiver(bus::TOPIC_TASK, |payload| async move {
+        debug!("收到 task 消息: {}", payload);
+        let task = TaskRequest { payload };
+        handle_task(task);
     });
-}
-
-async fn run_receiver() -> Result<(), BusError> {
-    let topic = Bus::topic(TOPIC_TASK);
-    info!("task 总线接收器已启动，监听 topic: {}", TOPIC_TASK);
-
-    loop {
-        match topic.pop() {
-            Some(payload) => {
-                debug!("收到 task 消息: {}", payload);
-                let task = TaskRequest { payload };
-                handle_task(task);
-            }
-            None => {
-                tokio::time::sleep(POLL_INTERVAL).await;
-            }
-        }
-    }
 }
 
 /// 处理 task 请求（空壳，后续补充 cron 定时逻辑）

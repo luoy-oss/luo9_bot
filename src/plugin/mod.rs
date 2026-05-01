@@ -27,8 +27,8 @@ use data::PluginData;
 pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     info!("正在初始化插件系统...");
 
-    // 初始化 FFI 总线
-    if let Err(e) = bus::Bus::init(1024) {
+    // 初始化 FFI 总线（无界队列，不丢消息）
+    if let Err(e) = bus::Bus::init() {
         error!("FFI 总线初始化失败: {:?}", e);
         return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Bus init failed")));
     }
