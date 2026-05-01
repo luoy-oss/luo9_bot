@@ -1,5 +1,5 @@
+use serde::{Serialize, Serializer};
 use serde_json::Value;
-use tokio::runtime::Handle;
 
 
 /*
@@ -36,15 +36,25 @@ use tokio::runtime::Handle;
 */
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MsgType {
     Private,
     Group,
     Other,
 }
 
+impl Serialize for MsgType {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            MsgType::Private => serializer.serialize_str("private"),
+            MsgType::Group => serializer.serialize_str("group"),
+            MsgType::Other => serializer.serialize_str("other"),
+        }
+    }
+}
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Serialize, Clone)]
 pub struct Message {
     pub message_type: MsgType,
     pub user_id: u64,
@@ -72,71 +82,5 @@ impl Message {
             group_id,
             message,
         }
-
-
     }
-}
-
-use std::ffi::{c_ulonglong, c_longlong, c_char};
-use std::ffi::CStr;
-use std::sync::OnceLock;
-use crate::connection::Sender;
-use crate::error::Result;
-use tracing::{error, warn};
-
-// 导入 core 的注册函数
-unsafe extern "C" {
-    pub(crate) unsafe fn luo9_register_send_group_msg(f: extern "C" fn(c_ulonglong, *const c_char) -> c_longlong);
-    pub(crate) unsafe fn luo9_register_send_private_msg(f: extern "C" fn(c_ulonglong, *const c_char) -> c_longlong);
-}
-
-static GLOBAL_SENDER: OnceLock<Sender> = OnceLock::new();
-
-pub fn init_global_sender(sender: Sender) -> Result<&'static str> {
-    let _ = GLOBAL_SENDER.set(sender);
-    Ok("全局 Sender 实例已初始化")
-}
-
-pub fn get_global_sender() -> Option<&'static Sender> {
-    GLOBAL_SENDER.get()
-}
-
-pub(crate) extern "C" fn real_send_group_msg(group_id: c_ulonglong, msg: *const c_char) -> c_longlong {
-    let msg_str = unsafe { CStr::from_ptr(msg).to_string_lossy() };
-
-    let Some(sender) = get_global_sender().cloned() else {
-        error!("⚠ 全局 Sender 未初始化");
-        return -2;
-    };
-
-    let group_id = group_id as u64;
-    let msg_str = msg_str.to_string();
-    
-    Handle::current().spawn(async move {
-        if let Err(e) = sender.send_group_message(group_id, &msg_str).await {
-            warn!("✗ 群消息发送失败: {}", e);
-        }
-    });
-
-    10086
-}
-
-pub(crate) extern "C" fn real_send_private_msg(user_id: c_ulonglong, msg: *const c_char) -> c_longlong {
-    let msg_str = unsafe { CStr::from_ptr(msg).to_string_lossy() };
-
-    let Some(sender) = get_global_sender().cloned() else {
-        error!("⚠ 全局 Sender 未初始化");
-        return -2;
-    };
-
-    let user_id = user_id as u64;
-    let msg_str = msg_str.to_string();
-    
-    Handle::current().spawn(async move {
-        if let Err(e) = sender.send_private_message(user_id, &msg_str).await {
-            warn!("✗ 私聊发送失败: {}", e);
-        }
-    });
-
-    10087
 }

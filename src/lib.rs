@@ -19,7 +19,7 @@ use config::LNConfig;
 use error::Result;
 use tracing::info;
 
-use plugin::load_all_plugins;
+use plugin as Plugin;
 
 
 /// 应用上下文
@@ -42,13 +42,6 @@ impl LNContext {
             &config.napcat.ws_client_host,
             config.napcat.ws_client_port,
         );
-        
-        unsafe {
-            message::napcat::luo9_register_send_group_msg(message::napcat::real_send_group_msg);
-            message::napcat::luo9_register_send_private_msg(message::napcat::real_send_private_msg);
-        }
-
-        info!(">>> send 逻辑已注册到 core");
 
         let tx = connection::Sender::connect(
             &config.napcat.ws_server_host,
@@ -56,15 +49,14 @@ impl LNContext {
             config.napcat.timeout_seconds,
             &config.napcat.token,
         ).await?;
-        
-        // 初始化全局 Sender 实例，供 DLL 回调函数使用
-        if let Err(e) = message::napcat::init_global_sender(tx.clone()) {
-            tracing::warn!("全局 Sender 初始化警告: {}", e);
-        } else {
-            info!("全局 Sender 实例已初始化");
-        }
-        
-        load_all_plugins(&config.plugins);
+
+        // 初始化插件系统（含 bus 总线初始化、插件加载、接收器启动）
+        let _ = Plugin::initialize(&config.plugins.plugin_dir).await;
+
+        // 初始化 bus 消息发送器
+        Plugin::sender::init_sender(tx.clone()).await;
+
+        // Plugin::load_all_plugins(&config.plugins);
 
         info!("应用初始化完成");
         

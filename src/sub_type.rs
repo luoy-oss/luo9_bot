@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Debug, Clone)]
 pub enum SubType{
@@ -32,6 +32,37 @@ pub enum SubType{
   Invite,       //邀请
 
   None,      // 无子类型
+}
+
+impl Serialize for SubType {
+  fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    match self {
+      SubType::Enable => serializer.serialize_str("enable"),
+      SubType::Disable => serializer.serialize_str("disable"),
+      SubType::Connect => serializer.serialize_str("connect"),
+      SubType::Friend => serializer.serialize_str("friend"),
+      SubType::GroupTemp => serializer.serialize_str("group"),
+      SubType::GroupSelf => serializer.serialize_str("group_self"),
+      SubType::Other => serializer.serialize_str("other"),
+      SubType::Normal => serializer.serialize_str("normal"),
+      SubType::Notice => serializer.serialize_str("notice"),
+      SubType::Set => serializer.serialize_str("set"),
+      SubType::Unset => serializer.serialize_str("unset"),
+      SubType::Ban => serializer.serialize_str("ban"),
+      SubType::LiftBan => serializer.serialize_str("lift_ban"),
+      SubType::Leave => serializer.serialize_str("leave"),
+      SubType::Kick => serializer.serialize_str("kick"),
+      SubType::KickMe => serializer.serialize_str("kick_me"),
+      SubType::Approve => serializer.serialize_str("approve"),
+      SubType::Poke => serializer.serialize_str("poke"),
+      SubType::InputStatus => serializer.serialize_str("input_status"),
+      SubType::Title => serializer.serialize_str("title"),
+      SubType::ProfileLike => serializer.serialize_str("profile_like"),
+      SubType::Add => serializer.serialize_str("add"),
+      SubType::Invite => serializer.serialize_str("invite"),
+      SubType::None => serializer.serialize_str("none"),
+    }
+  }
 }
 
 impl<'de> Deserialize<'de> for SubType {

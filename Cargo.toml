@@ -1,6 +1,6 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0-beta.1"
+version = "0.1.0-beta.2"
 edition = "2024"
 authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人"
@@ -13,7 +13,8 @@ plugins = []  # 插件系统支持
 default = ["napcat"]
 
 [dependencies]
-luo9_sdk = "0.2.0"
+luo9_sdk = "0.5.1"
+# luo9_sdk = { path = "H:\\github\\luo9_bot\\sdk\\rust" }
 
 # 异步运行时
 tokio = { version = "1.50.0", features = ["full"] }
@@ -25,7 +26,7 @@ futures-util = "0.3.32"
 # 序列化
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-toml = "1.1.0+spec-1.1.0"
+toml = "1.1.2"
 
 # 日志
 tracing = "0.1.44"
@@ -35,12 +36,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 anyhow = "1.0.102"
 thiserror = "2.0.18"
 chrono = "0.4.44"
-libloading = "0.8.3"
-
-# 插件系统依赖
-[target.'cfg(feature = "plugins")'.dependencies]
-libloading = "0.8.3"  # 动态库加载
-parking_lot = "0.12.3"  # 线程安全锁
+libloading = "0.9.0"
+lazy_static = "1.5.0"
+libc = "0.2"
 
 
 [lib]

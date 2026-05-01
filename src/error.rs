@@ -29,6 +29,9 @@ pub enum LNErr {
     #[error("未知的消息类型")]
     UnknownMsgType,
     
+    #[error("无效的消息格式")]
+    InvalidMessage,
+    
     #[error("未知的元事件类型")]
     UnknownMetaEventType,
     

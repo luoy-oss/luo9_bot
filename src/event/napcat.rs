@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::sub_type::SubType;
@@ -10,13 +10,23 @@ pub enum MetaEventType {
     Unknown,
 }
 
+impl Serialize for MetaEventType {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            MetaEventType::Lifecycle => serializer.serialize_str("lifecycle"),
+            MetaEventType::Heartbeat => serializer.serialize_str("heartbeat"),
+            MetaEventType::Unknown => serializer.serialize_str("unknown"),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Status{
     pub good: bool,
     pub online: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MetaEvent {
     pub interval: Option<u64>,
     pub meta_event_type: MetaEventType,

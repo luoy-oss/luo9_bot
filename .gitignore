@@ -7,4 +7,6 @@ plugins/
 build.bat
 build.rs
 
+.claude/
+
 Cargo.lock
