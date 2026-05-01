@@ -12,12 +12,12 @@ pub fn handle(data: Value) -> Result<()>{
         .and_then(|v| serde_json::from_value::<PostType>(v.clone()).ok())
         .ok_or(LNErr::EventParseError("Invalid post_type".to_string()))?;
 
-    // println!("post_type: {}", post_type);
-    println!(">>> [收到推送消息]");
-    match serde_json::to_string_pretty(&data) {
-        Ok(pretty) => println!("{}", pretty),
-        Err(_) => println!("{:?}", data),
-    }
+    // // println!("post_type: {}", post_type);
+    // println!(">>> [收到推送消息]");
+    // match serde_json::to_string_pretty(&data) {
+    //     Ok(pretty) => println!("{}", pretty),
+    //     Err(_) => println!("{:?}", data),
+    // }
 
     match post_type {
         PostType::MetaEvent => {
