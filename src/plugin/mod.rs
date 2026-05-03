@@ -5,6 +5,7 @@ pub mod loader;
 pub mod data;
 pub mod task;
 pub mod sender;
+pub mod version;
 
 // 重新导出常用类型和函数
 pub use bus::publish_data;
@@ -45,6 +46,9 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
 
     // 注册插件信息到全局管理器
     init_global_manager(infos).await;
+
+    // 查询插件版本（5秒超时）
+    version::query_versions(std::time::Duration::from_secs(5)).await;
 
     info!("插件系统初始化完成");
     Ok(())

@@ -35,6 +35,23 @@ impl PluginManager {
         &self.plugin_infos
     }
 
+    /// 按名称更新插件版本
+    pub fn update_plugin_version(&mut self, name: &str, version: &str) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.version = version.to_string();
+            info!("插件 #{} ({}) 版本更新为: {}", info.id, info.name, version);
+        }
+    }
+
+    /// 将所有空版本的插件标记为 Unknown
+    pub fn mark_unknown_versions(&mut self) {
+        for info in &mut self.plugin_infos {
+            if info.version.is_empty() {
+                info.version = "Unknown".to_string();
+            }
+        }
+    }
+
     /// 获取统计信息
     pub fn get_stats(&self) -> String {
         format!("插件统计: 总数={}", self.plugin_infos.len())
