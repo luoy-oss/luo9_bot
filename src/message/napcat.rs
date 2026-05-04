@@ -62,6 +62,15 @@ pub struct Message {
     pub message: String,
 }
 
+fn decode_html_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+}
+
 impl Message {
     pub fn new(data: Value) -> Self {
         let message_type = match data.get("message_type").and_then(|v| v.as_str()) {
@@ -74,7 +83,11 @@ impl Message {
 
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
 
-        let message = data.get("raw_message").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let message = data.get("raw_message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let message = decode_html_entities(&message);
 
         Self{
             message_type,
