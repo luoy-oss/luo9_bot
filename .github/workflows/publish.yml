@@ -1,0 +1,61 @@
+# Luo9 Bot 注册表发布 workflow
+# 当 Release 创建时，通过 repository_dispatch 通知注册表仓库更新 bot 版本
+# 前置条件：在组织 Settings > Secrets 中添加 APP_ID 和 APP_PRIVATE_KEY
+name: Publish to Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: "!github.event.release.prerelease"
+    steps:
+      - name: Checkout 仓库
+        uses: actions/checkout@v4
+
+      - name: 获取 App Token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: registry
+
+      - name: 读取 Cargo.toml 信息
+        id: meta
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+          DESCRIPTION=$(grep '^description' Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+          [ -z "$DESCRIPTION" ] && DESCRIPTION="Luo9 Bot"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+
+      - name: 通知注册表
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          [ -z "$TAG" ] && TAG="v${{ steps.meta.outputs.version }}"
+
+          curl -X POST \
+            -H "Authorization: token ${{ steps.app-token.outputs.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/luo9-bot/registry/dispatches \
+            -d "$(jq -n \
+              --arg event "bot-publish" \
+              --arg version "${{ steps.meta.outputs.version }}" \
+              --arg tag "$TAG" \
+              --arg repo "${{ github.repository }}" \
+              '{
+                event_type: $event,
+                client_payload: {
+                  version: $version,
+                  tag: $tag,
+                  repo: $repo,
+                  assets: {
+                    "windows-x86_64": "luo9_bot.exe",
+                    "linux-x86_64": "luo9_bot"
+                  }
+                }
+              }')"
