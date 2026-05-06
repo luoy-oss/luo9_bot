@@ -69,9 +69,15 @@
     initLogs();
     initConfirm();
     initDownloadProgress();
+    initVisibilityHandler();
     refreshAll();
-    // 定时刷新状态
-    setInterval(refreshStatus, 10000);
+
+    // 本地运行时间每秒更新（不请求服务器）
+    setInterval(updateLocalUptime, 1000);
+    // 状态定时刷新（10 秒）
+    setInterval(() => {
+      if (!document.hidden) refreshStatus();
+    }, 10000);
   });
 
   // ── API 请求辅助 ─────────────────────
@@ -113,7 +119,9 @@
     try {
       const resp = await fetch(apiUrl('/api/status'));
       const data = await resp.json();
-      document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_secs);
+      // 更新启动时间戳
+      startTimestamp = data.start_timestamp;
+      updateLocalUptime();
       document.getElementById('stat-plugins').textContent = data.plugin_count;
       document.getElementById('stat-dir').textContent = data.plugin_dir;
       const verEl = document.getElementById('bot-version');
@@ -133,6 +141,26 @@
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     return h + '时' + m + '分';
+  }
+
+  // ── 本地运行时间更新 ─────────────────────
+  let startTimestamp = 0;    // 服务器启动的 Unix 时间戳（秒）
+
+  function updateLocalUptime() {
+    if (startTimestamp === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const uptime = now - startTimestamp;
+    const el = document.getElementById('stat-uptime');
+    if (el) el.textContent = formatUptime(Math.max(0, uptime));
+  }
+
+  // ── 页面可见性处理 ───────────────────────
+  function initVisibilityHandler() {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        refreshStatus();
+      }
+    });
   }
 
   // ── 已安装插件 ─────────────────────────
@@ -612,6 +640,7 @@
 
   // 定时拉取日志
   setInterval(() => {
+    if (document.hidden) return;
     const logsTab = document.getElementById('tab-logs');
     if (logsTab && logsTab.classList.contains('active')) {
       refreshLogs();
