@@ -1,6 +1,6 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0-beta.5"
+version = "0.1.0-beta.6"
 edition = "2024"
 authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人"
