@@ -18,6 +18,24 @@ use crate::utils::logger;
 
 const REGISTRY_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
 
+/// GitHub 资源镜像前缀列表（按优先级排序）
+/// 每个前缀会拼接在原始 URL 的前面（去掉 https:// 前缀）
+const GITHUB_RAW_MIRRORS: &[&str] = &[
+    "https://ghfast.top/",
+    "https://ghproxy.cn/",
+    "https://raw.gitmirror.com/",
+];
+
+/// GitHub release 下载镜像前缀列表
+const GITHUB_RELEASE_MIRRORS: &[&str] = &[
+    "https://ghfast.top/",
+    "https://ghproxy.cn/",
+    "https://mirror.ghproxy.com/",
+];
+
+/// HTTP 请求超时时间
+const HTTP_TIMEOUT_SECS: u64 = 15;
+
 // ========== 注册表数据结构 ==========
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -448,36 +466,19 @@ async fn api_plugin_install(
         }
     };
 
-    // 构建下载 URL
-    let download_url = format!(
+    // 构建下载 URL（含镜像 fallback）
+    let primary_url = format!(
         "https://github.com/{}/releases/download/{}/{}",
         plugin.repo, version_entry.tag, asset_name
     );
+    let download_urls = build_mirrored_urls(&primary_url, GITHUB_RELEASE_MIRRORS);
 
-    info!("正在下载插件: {} v{} ({})", name, version_entry.version, download_url);
+    info!("正在下载插件: {} v{}", name, version_entry.version);
 
-    // 下载文件
-    let client = reqwest::Client::new();
-    let resp = match client
-        .get(&download_url)
-        .header("User-Agent", "luo9-bot")
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("下载请求失败: {e}")),
-    };
-
-    if !resp.status().is_success() {
-        return json_err(
-            StatusCode::BAD_GATEWAY,
-            &format!("下载失败，HTTP {}", resp.status()),
-        );
-    }
-
-    let bytes = match resp.bytes().await {
+    // 带镜像 fallback 下载文件
+    let bytes = match download_with_fallback(&download_urls).await {
         Ok(b) => b,
-        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("下载读取失败: {e}")),
+        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("下载失败: {e}")),
     };
 
     // 保存到插件目录
@@ -913,18 +914,95 @@ fn json_err(status: StatusCode, msg: &str) -> (StatusCode, Json<MsgResponse>) {
     )
 }
 
-async fn fetch_registry() -> Result<Registry, String> {
-    let client = reqwest::Client::new();
-    let body = client
-        .get(REGISTRY_URL)
-        .header("User-Agent", "luo9-bot")
-        .send()
-        .await
-        .map_err(|e| format!("请求失败: {e}"))?
-        .text()
-        .await
-        .map_err(|e| format!("读取响应失败: {e}"))?;
+/// 构建镜像 URL 列表：原始 URL + 各镜像 URL
+///
+/// 对于 `https://raw.githubusercontent.com/...` 形式的 URL，
+/// 镜像 URL 为 `https://ghfast.top/https://raw.githubusercontent.com/...`
+fn build_mirrored_urls(original: &str, mirrors: &[&str]) -> Vec<String> {
+    let mut urls = Vec::with_capacity(1 + mirrors.len());
+    urls.push(original.to_string());
+    for mirror in mirrors {
+        urls.push(format!("{}{}", mirror, original));
+    }
+    urls
+}
 
+/// 带镜像 fallback 的 HTTP GET 请求
+///
+/// 依次尝试每个 URL，返回第一个成功的响应文本。
+/// 所有 URL 都失败时，返回最后一个错误。
+async fn fetch_with_fallback(urls: &[String]) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    let mut last_err = String::new();
+    for url in urls {
+        match client
+            .get(url)
+            .header("User-Agent", "luo9-bot")
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.text().await {
+                    Ok(body) => return Ok(body),
+                    Err(e) => last_err = format!("读取响应失败 ({url}): {e}"),
+                }
+            }
+            Ok(resp) => {
+                last_err = format!("HTTP {} ({url})", resp.status());
+                warn!("镜像请求失败: {}", last_err);
+            }
+            Err(e) => {
+                last_err = format!("请求失败 ({url}): {e}");
+                warn!("镜像请求失败: {}", last_err);
+            }
+        }
+    }
+    Err(last_err)
+}
+
+/// 带镜像 fallback 的文件下载
+///
+/// 依次尝试每个 URL，返回第一个成功的响应字节。
+async fn download_with_fallback(urls: &[String]) -> Result<Vec<u8>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 4)) // 下载给更长时间
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    let mut last_err = String::new();
+    for url in urls {
+        match client
+            .get(url)
+            .header("User-Agent", "luo9-bot")
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.bytes().await {
+                    Ok(bytes) => return Ok(bytes.to_vec()),
+                    Err(e) => last_err = format!("读取响应失败 ({url}): {e}"),
+                }
+            }
+            Ok(resp) => {
+                last_err = format!("HTTP {} ({url})", resp.status());
+                warn!("镜像下载失败: {}", last_err);
+            }
+            Err(e) => {
+                last_err = format!("请求失败 ({url}): {e}");
+                warn!("镜像下载失败: {}", last_err);
+            }
+        }
+    }
+    Err(last_err)
+}
+
+async fn fetch_registry() -> Result<Registry, String> {
+    let urls = build_mirrored_urls(REGISTRY_URL, GITHUB_RAW_MIRRORS);
+    let body = fetch_with_fallback(&urls).await?;
     serde_json::from_str(&body).map_err(|e| format!("解析注册表失败: {e}"))
 }
 
@@ -1026,4 +1104,228 @@ fn extract_plugin_name(file_name: &str) -> Option<&str> {
         return Some(name.strip_prefix("lib").unwrap_or(name));
     }
     None
+}
+
+// ========== 测试 ==========
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── build_mirrored_urls ──────────────────────────────────────
+
+    #[test]
+    fn test_build_mirrored_urls_registry() {
+        let urls = build_mirrored_urls(REGISTRY_URL, GITHUB_RAW_MIRRORS);
+        // 原始 URL + 3 个镜像
+        assert_eq!(urls.len(), 1 + GITHUB_RAW_MIRRORS.len());
+        assert_eq!(urls[0], REGISTRY_URL);
+        assert!(urls[1].starts_with("https://ghfast.top/"));
+        assert!(urls[1].ends_with("registry.json"));
+        assert!(urls[2].starts_with("https://ghproxy.cn/"));
+        assert!(urls[3].starts_with("https://raw.gitmirror.com/"));
+    }
+
+    #[test]
+    fn test_build_mirrored_urls_release() {
+        let primary = "https://github.com/luo9-bot/plugin/releases/download/v1.0/plugin.dll";
+        let urls = build_mirrored_urls(primary, GITHUB_RELEASE_MIRRORS);
+        assert_eq!(urls.len(), 1 + GITHUB_RELEASE_MIRRORS.len());
+        assert_eq!(urls[0], primary);
+        // 镜像 URL = 前缀 + 原始 URL
+        assert_eq!(
+            urls[1],
+            "https://ghfast.top/https://github.com/luo9-bot/plugin/releases/download/v1.0/plugin.dll"
+        );
+    }
+
+    #[test]
+    fn test_build_mirrored_urls_empty_mirrors() {
+        let urls = build_mirrored_urls("https://example.com/file.json", &[]);
+        assert_eq!(urls.len(), 1);
+        assert_eq!(urls[0], "https://example.com/file.json");
+    }
+
+    // ── detect_platform ──────────────────────────────────────────
+
+    #[test]
+    fn test_detect_platform_format() {
+        let platform = detect_platform();
+        let parts: Vec<&str> = platform.split('-').collect();
+        assert_eq!(parts.len(), 2, "平台格式应为 os-arch");
+        assert!(
+            ["windows", "linux", "macos"].contains(&parts[0]),
+            "未知操作系统: {}",
+            parts[0]
+        );
+        assert!(
+            ["x86_64", "aarch64", "unknown"].contains(&parts[1]),
+            "未知架构: {}",
+            parts[1]
+        );
+    }
+
+    #[test]
+    fn test_detect_platform_current() {
+        let platform = detect_platform();
+        if cfg!(target_os = "windows") {
+            assert!(platform.starts_with("windows"));
+        } else if cfg!(target_os = "linux") {
+            assert!(platform.starts_with("linux"));
+        } else {
+            assert!(platform.starts_with("macos"));
+        }
+    }
+
+    // ── extract_plugin_name ──────────────────────────────────────
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_extract_plugin_name_dll() {
+        assert_eq!(extract_plugin_name("plugin_doro.dll"), Some("plugin_doro"));
+        assert_eq!(extract_plugin_name("my_plugin.dll"), Some("my_plugin"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_extract_plugin_name_disabled_dll() {
+        assert_eq!(
+            extract_plugin_name("plugin_doro.dll.disabled"),
+            Some("plugin_doro")
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_extract_plugin_name_so() {
+        assert_eq!(extract_plugin_name("libplugin_doro.so"), Some("plugin_doro"));
+        assert_eq!(extract_plugin_name("libmy_plugin.so"), Some("my_plugin"));
+        // 没有 lib 前缀的也支持
+        assert_eq!(extract_plugin_name("plugin_doro.so"), Some("plugin_doro"));
+    }
+
+    #[test]
+    fn test_extract_plugin_name_unknown() {
+        assert_eq!(extract_plugin_name("readme.txt"), None);
+        assert_eq!(extract_plugin_name("config.toml"), None);
+    }
+
+    // ── Registry JSON 解析 ───────────────────────────────────────
+
+    #[test]
+    fn test_registry_parse_empty() {
+        let json = r#"{"plugins": {}}"#;
+        let registry: Registry = serde_json::from_str(json).unwrap();
+        assert!(registry.plugins.is_empty());
+    }
+
+    #[test]
+    fn test_registry_parse_single_plugin() {
+        let json = r#"{
+            "plugins": {
+                "test_plugin": {
+                    "description": "测试插件",
+                    "repo": "luo9-bot/test-plugin",
+                    "tags": ["工具"],
+                    "versions": [
+                        {
+                            "version": "1.0.0",
+                            "tag": "v1.0.0",
+                            "sdk_version": "0.6.0",
+                            "assets": {
+                                "windows-x86_64": "test_plugin.dll",
+                                "linux-x86_64": "libtest_plugin.so"
+                            }
+                        }
+                    ]
+                }
+            }
+        }"#;
+        let registry: Registry = serde_json::from_str(json).unwrap();
+        let plugin = registry.plugins.get("test_plugin").unwrap();
+        assert_eq!(plugin.description, "测试插件");
+        assert_eq!(plugin.repo, "luo9-bot/test-plugin");
+        assert_eq!(plugin.tags, vec!["工具"]);
+        assert_eq!(plugin.versions.len(), 1);
+        assert_eq!(plugin.versions[0].version, "1.0.0");
+        assert_eq!(plugin.versions[0].assets.len(), 2);
+    }
+
+    #[test]
+    fn test_registry_parse_no_tags_no_versions() {
+        let json = r#"{
+            "plugins": {
+                "bare_plugin": {
+                    "description": "裸插件",
+                    "repo": "luo9-bot/bare-plugin"
+                }
+            }
+        }"#;
+        let registry: Registry = serde_json::from_str(json).unwrap();
+        let plugin = registry.plugins.get("bare_plugin").unwrap();
+        assert!(plugin.tags.is_empty());
+        assert!(plugin.versions.is_empty());
+    }
+
+    // ── URL 构建验证 ─────────────────────────────────────────────
+
+    #[test]
+    fn test_registry_url_is_valid() {
+        assert!(REGISTRY_URL.starts_with("https://"));
+        assert!(REGISTRY_URL.contains("raw.githubusercontent.com"));
+        assert!(REGISTRY_URL.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_mirror_urls_all_https() {
+        for mirror in GITHUB_RAW_MIRRORS {
+            assert!(mirror.starts_with("https://"), "镜像必须使用 HTTPS: {mirror}");
+            assert!(mirror.ends_with('/'), "镜像前缀必须以 / 结尾: {mirror}");
+        }
+        for mirror in GITHUB_RELEASE_MIRRORS {
+            assert!(mirror.starts_with("https://"), "镜像必须使用 HTTPS: {mirror}");
+            assert!(mirror.ends_with('/'), "镜像前缀必须以 / 结尾: {mirror}");
+        }
+    }
+
+    // ── fetch_with_fallback 集成测试 ─────────────────────────────
+
+    #[tokio::test]
+    async fn test_fetch_with_fallback_all_fail() {
+        let urls = vec![
+            "https://this-domain-does-not-exist-12345.com/fail".to_string(),
+            "https://this-also-does-not-exist-12345.com/fail".to_string(),
+        ];
+        let result = fetch_with_fallback(&urls).await;
+        assert!(result.is_err(), "所有 URL 都失败时应返回错误");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_fallback_success() {
+        // 使用 httpbin 的稳定公共端点
+        let urls = vec![
+            "https://httpbin.org/get".to_string(),
+        ];
+        let result = fetch_with_fallback(&urls).await;
+        assert!(result.is_ok(), "正常 URL 应成功: {:?}", result.err());
+        let body = result.unwrap();
+        assert!(body.contains("url"), "响应应包含 url 字段");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_fallback_first_fails_second_succeeds() {
+        let urls = vec![
+            "https://this-domain-does-not-exist-12345.com/fail".to_string(),
+            "https://httpbin.org/get".to_string(),
+        ];
+        let result = fetch_with_fallback(&urls).await;
+        assert!(result.is_ok(), "第一个失败后应 fallback 到第二个: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_fallback_empty_urls() {
+        let urls: Vec<String> = vec![];
+        let result = fetch_with_fallback(&urls).await;
+        assert!(result.is_err(), "空 URL 列表应返回错误");
+    }
 }
