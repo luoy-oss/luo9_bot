@@ -4,7 +4,7 @@ use axum::{
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::utils::logger;
 
@@ -57,6 +57,12 @@ struct PluginInfo {
     name: String,
     file: String,
     enabled: bool,
+    #[serde(default)]
+    priority: i32,
+    #[serde(default)]
+    block_enabled: bool,
+    #[serde(default)]
+    active: bool,
 }
 
 #[derive(Serialize)]
@@ -82,6 +88,16 @@ struct LogResponse {
 struct MsgResponse {
     ok: bool,
     message: String,
+}
+
+#[derive(Deserialize)]
+struct PriorityRequest {
+    priority: i32,
+}
+
+#[derive(Deserialize)]
+struct BlockRequest {
+    block_enabled: bool,
 }
 
 /// 注册表中可用插件的展示信息
@@ -143,6 +159,9 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/plugins/{name}", delete(api_plugin_delete))
         .route("/api/plugins/{name}/enable", post(api_plugin_enable))
         .route("/api/plugins/{name}/disable", post(api_plugin_disable))
+        .route("/api/plugins/{name}/reload", post(api_plugin_reload))
+        .route("/api/plugins/{name}/priority", put(api_plugin_priority))
+        .route("/api/plugins/{name}/block", put(api_plugin_block))
         .route("/api/plugins/install/{name}", post(api_plugin_install))
         .route("/api/registry", get(api_registry))
         .route("/api/logs", get(api_logs))
@@ -268,7 +287,18 @@ async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
 }
 
 async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
-    let plugins = scan_plugins(&state.plugin_dir);
+    let mut plugins = scan_plugins(&state.plugin_dir);
+
+    // 从插件管理器获取运行时信息
+    let manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+    for plugin in &mut plugins {
+        if let Some(info) = manager.get_plugin_info(&plugin.name) {
+            plugin.priority = info.priority;
+            plugin.block_enabled = info.block_enabled;
+            plugin.active = info.active;
+        }
+    }
+
     Json(plugins)
 }
 
@@ -456,12 +486,107 @@ async fn api_plugin_disable(
         .to_string();
     let disabled_path = dir.join(format!("{file_name}.disabled"));
 
+    // 运行时禁用（取消订阅，等待线程退出）
+    {
+        let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+        match manager.disable_plugin(&name).await {
+            Ok(msg) => info!("{}", msg),
+            Err(e) => warn!("运行时禁用插件 {} 失败: {}", name, e),
+        }
+    }
+
+    // 文件重命名（持久化）
     if let Err(e) = fs::rename(&enabled_path, &disabled_path) {
         return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("禁用失败: {e}"));
     }
 
     info!("插件已禁用: {name}");
-    json_ok(&format!("插件 {name} 已禁用，重启后生效"))
+    json_ok(&format!("插件 {name} 已禁用"))
+}
+
+/// 热重载插件
+async fn api_plugin_reload(
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+    match manager.disable_plugin(&name).await {
+        Ok(_) => {}
+        Err(e) => {
+            // 如果插件已经是禁用状态，仍然尝试重新加载
+            if !e.contains("已经是禁用状态") {
+                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("禁用失败: {e}"));
+            }
+        }
+    }
+    // TODO: 实现重新加载逻辑（需要 loader 支持单个插件重新加载）
+    json_ok(&format!("插件 {name} 已禁用，需要重启才能重新加载"))
+}
+
+/// 设置插件优先级
+async fn api_plugin_priority(
+    Path(name): Path<String>,
+    Json(req): Json<PriorityRequest>,
+) -> impl IntoResponse {
+    let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+    match manager.update_priority(&name, req.priority) {
+        Ok(()) => {
+            // 更新分发列表
+            let entries = manager.get_dispatch_list();
+            drop(manager);
+            crate::plugin::update_dispatch_list(entries);
+
+            // 持久化到配置文件
+            let mut config = match crate::config::LNConfig::load() {
+                Ok(c) => c,
+                Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+            };
+            config.upsert_plugin_entry(crate::config::PluginEntry {
+                name: name.clone(),
+                priority: req.priority,
+                block_enabled: config.get_plugin_entry(&name).map(|e| e.block_enabled).unwrap_or(false),
+            });
+            if let Err(e) = config.save() {
+                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+            }
+
+            json_ok(&format!("插件 {name} 优先级已设置为 {}", req.priority))
+        }
+        Err(e) => json_err(StatusCode::NOT_FOUND, &e),
+    }
+}
+
+/// 设置插件消息阻断
+async fn api_plugin_block(
+    Path(name): Path<String>,
+    Json(req): Json<BlockRequest>,
+) -> impl IntoResponse {
+    let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+    match manager.update_block(&name, req.block_enabled) {
+        Ok(()) => {
+            // 更新分发列表
+            let entries = manager.get_dispatch_list();
+            drop(manager);
+            crate::plugin::update_dispatch_list(entries);
+
+            // 持久化到配置文件
+            let mut config = match crate::config::LNConfig::load() {
+                Ok(c) => c,
+                Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+            };
+            config.upsert_plugin_entry(crate::config::PluginEntry {
+                name: name.clone(),
+                priority: config.get_plugin_entry(&name).map(|e| e.priority).unwrap_or(0),
+                block_enabled: req.block_enabled,
+            });
+            if let Err(e) = config.save() {
+                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+            }
+
+            let status = if req.block_enabled { "启用" } else { "禁用" };
+            json_ok(&format!("插件 {name} 消息阻断已{status}"))
+        }
+        Err(e) => json_err(StatusCode::NOT_FOUND, &e),
+    }
 }
 
 async fn api_plugin_upload(
@@ -672,6 +797,9 @@ fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
                     name: name.to_string(),
                     file: file_name.to_string(),
                     enabled: !file_name.ends_with(".disabled"),
+                    priority: 0,
+                    block_enabled: false,
+                    active: false,
                 });
             }
         }

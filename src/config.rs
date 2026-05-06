@@ -29,6 +29,18 @@ pub struct LoggingConfig {
     pub level: String,
 }
 
+/// 插件配置条目（存储在主配置文件的 `[[plugins.plugins]]` 数组中）
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PluginEntry {
+    pub name: String,
+    #[serde(default = "default_priority")]
+    pub priority: i32,
+    #[serde(default)]
+    pub block_enabled: bool,
+}
+
+fn default_priority() -> i32 { 0 }
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginConfig {
     #[serde(default = "default_enabled")]
@@ -38,7 +50,7 @@ pub struct PluginConfig {
     #[serde(default = "default_auto_load")]
     pub auto_load: bool,
     #[serde(default)]
-    pub plugins: Vec<String>,
+    pub plugins: Vec<PluginEntry>,
 }
 
 impl Default for PluginConfig {
@@ -132,6 +144,30 @@ impl LNConfig {
         }
 
         Ok(config)
+    }
+
+    /// 保存配置到文件
+    pub fn save(&self) -> Result<()> {
+        let path = Self::config_path();
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| crate::error::LNErr::Config(format!("序列化配置失败: {}", e)))?;
+        fs::write(&path, content)?;
+        Ok(())
+    }
+
+    /// 获取指定插件的配置条目
+    pub fn get_plugin_entry(&self, name: &str) -> Option<&PluginEntry> {
+        self.plugins.plugins.iter().find(|p| p.name == name)
+    }
+
+    /// 更新或插入插件配置条目
+    pub fn upsert_plugin_entry(&mut self, entry: PluginEntry) {
+        if let Some(existing) = self.plugins.plugins.iter_mut().find(|p| p.name == entry.name) {
+            existing.priority = entry.priority;
+            existing.block_enabled = entry.block_enabled;
+        } else {
+            self.plugins.plugins.push(entry);
+        }
     }
     
     // 修复 receiver_url 和 sender_url 方法

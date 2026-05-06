@@ -2,13 +2,14 @@
 pub mod bus;
 pub mod manager;
 pub mod loader;
+pub mod handle;
 pub mod data;
 pub mod task;
 pub mod sender;
 pub mod version;
+pub mod dispatch;
 
 // 重新导出常用类型和函数
-pub use bus::publish_data;
 pub use manager::{
     PluginManager,
     PluginInfo,
@@ -17,15 +18,15 @@ pub use manager::{
     get_manager_stats
 };
 pub use loader::PluginLoader;
+pub use dispatch::{update_dispatch_list, priority_dispatch_message, priority_dispatch_notice, priority_dispatch_meta_event};
 
 use tracing::{error, info};
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
-use data::PluginData;
 
 /// 初始化插件系统
-pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn initialize(plugins_dir: &str, config_entries: &[crate::config::PluginEntry]) -> Result<(), Box<dyn std::error::Error>> {
     info!("正在初始化插件系统...");
 
     // 初始化 FFI 总线（无界队列，不丢消息）
@@ -38,14 +39,21 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
     task::start_task_receiver();
     sender::start_send_receiver();
 
-    // 加载插件（加载后自动启动各插件的 plugin_main 线程）
-    let loader = PluginLoader::new(plugins_dir);
-    let infos = loader.load_all()?;
+    // 加载插件（加载后自动启动各插件的 plugin_main 线程，并创建 subscriber）
+    let plugin_loader = PluginLoader::new(plugins_dir);
+    let (infos, handles) = plugin_loader.load_all()?;
 
     info!("成功加载 {} 个插件", infos.len());
 
-    // 注册插件信息到全局管理器
-    init_global_manager(infos).await;
+    // 注册插件信息和句柄到全局管理器（应用配置中的 priority/block_enabled）
+    init_global_manager(infos, handles, config_entries).await;
+
+    // 初始化优先级分发列表
+    let dispatch_entries = {
+        let manager = GLOBAL_PLUGIN_MANAGER.lock().await;
+        manager.get_dispatch_list()
+    };
+    update_dispatch_list(dispatch_entries);
 
     // 查询插件版本（5秒超时）
     version::query_versions(std::time::Duration::from_secs(5)).await;
@@ -54,19 +62,19 @@ pub async fn initialize(plugins_dir: &str) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-/// 统一的消息分发函数
+/// 统一的消息分发函数（使用优先级分发）
 pub fn dispatch_message(msg: Message) {
-    bus::publish_data(&PluginData::Message(msg));
+    priority_dispatch_message(msg);
 }
 
-/// 分发元事件
+/// 分发元事件（使用优先级分发）
 pub fn dispatch_meta_event(event: MetaEvent) {
-    bus::publish_data(&PluginData::MetaEvent(event));
+    priority_dispatch_meta_event(event);
 }
 
-/// 分发通知
+/// 分发通知（使用优先级分发）
 pub fn dispatch_notice(notice: Notice) {
-    bus::publish_data(&PluginData::Notice(notice));
+    priority_dispatch_notice(notice);
 }
 
 /// 获取插件系统状态

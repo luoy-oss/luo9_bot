@@ -146,9 +146,23 @@
           <div class="plugin-info">
             <div class="plugin-name">${esc(p.name)}</div>
             <div class="plugin-file">${esc(p.file)}</div>
+            <div class="plugin-controls">
+              <label class="control-label" title="优先级越高越先收到消息">
+                优先级:
+                <input type="number" class="priority-input" value="${p.priority || 0}" min="-100" max="100"
+                       onchange="setPriority('${esc(p.name)}', this.value)">
+              </label>
+              <label class="control-label" title="启用后高优先级插件可阻断低优先级插件收到消息">
+                <input type="checkbox" ${p.block_enabled ? 'checked' : ''}
+                       onchange="setBlock('${esc(p.name)}', this.checked)">
+                阻断
+              </label>
+            </div>
           </div>
           <div class="plugin-meta">
+            <span class="badge ${p.active ? 'badge-on' : 'badge-off'}">${p.active ? '运行中' : '已停止'}</span>
             <span class="badge ${p.enabled ? 'badge-on' : 'badge-off'}">${p.enabled ? '启用' : '禁用'}</span>
+            <button class="btn btn-sm btn-accent" onclick="reloadPlugin('${esc(p.name)}')" title="热重载">重载</button>
             <button class="btn btn-sm ${p.enabled ? 'btn-danger' : 'btn-success'}"
                     onclick="togglePlugin('${esc(p.name)}', ${p.enabled})">
               ${p.enabled ? '禁用' : '启用'}
@@ -269,6 +283,51 @@
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) refreshInstalled();
+    } catch (e) {
+      showToast('请求失败: ' + e.message, false);
+    }
+  };
+
+  window.reloadPlugin = async function (name) {
+    const ok = await showConfirm('热重载插件', `确定要热重载插件 ${name} 吗？`);
+    if (!ok) return;
+
+    try {
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}/reload`), { method: 'POST' });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+      if (data.ok) refreshInstalled();
+    } catch (e) {
+      showToast('请求失败: ' + e.message, false);
+    }
+  };
+
+  window.setPriority = async function (name, value) {
+    const priority = parseInt(value, 10);
+    if (isNaN(priority)) return;
+
+    try {
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}/priority`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority }),
+      });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+    } catch (e) {
+      showToast('请求失败: ' + e.message, false);
+    }
+  };
+
+  window.setBlock = async function (name, blockEnabled) {
+    try {
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}/block`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ block_enabled: blockEnabled }),
+      });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
     } catch (e) {
       showToast('请求失败: ' + e.message, false);
     }

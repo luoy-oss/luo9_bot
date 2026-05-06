@@ -193,6 +193,38 @@ body {
 .plugin-name { font-weight: 700; font-size: 0.95em; }
 .plugin-desc { font-size: 0.82em; color: var(--text-light); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plugin-file { font-size: 0.75em; color: var(--text-muted); margin-top: 2px; font-family: "Cascadia Code", "Fira Code", monospace; }
+.plugin-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 0.8em;
+}
+.control-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-light);
+  cursor: pointer;
+}
+.priority-input {
+  width: 50px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+  text-align: center;
+  background: var(--card);
+  color: var(--text);
+}
+.priority-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+.control-label input[type="checkbox"] {
+  accent-color: var(--accent);
+}
 
 .plugin-meta {
   display: flex;

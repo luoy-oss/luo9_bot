@@ -52,7 +52,7 @@ impl LNContext {
         ).await?;
 
         // 初始化插件系统（含 bus 总线初始化、插件加载、接收器启动）
-        let _ = Plugin::initialize(&config.plugins.plugin_dir).await;
+        let _ = Plugin::initialize(&config.plugins.plugin_dir, &config.plugins.plugins).await;
 
         // 初始化 bus 消息发送器
         Plugin::sender::init_sender(tx.clone()).await;
