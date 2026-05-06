@@ -93,6 +93,8 @@
         if (btn.dataset.tab === 'logs') refreshLogs();
         // 切换到商店时加载
         if (btn.dataset.tab === 'store') refreshStore();
+        // 切换到配置时加载
+        if (btn.dataset.tab === 'config') refreshConfig();
       });
     });
   }
@@ -247,6 +249,24 @@
       const installed = p.installed;
       const sdkVer = p.sdk_version || '';
       const ghUrl = `https://github.com/${p.repo}`;
+      const versions = p.versions || [];
+      const hasMultipleVersions = versions.length > 1;
+
+      // 版本选择下拉框
+      let versionSelect = '';
+      if (hasMultipleVersions && !installed) {
+        const options = versions.map(v =>
+          `<option value="${esc(v.version)}">v${esc(v.version)} (SDK ${esc(v.sdk_version || '?')})</option>`
+        ).join('');
+        versionSelect = `<select class="version-select" id="ver-${esc(p.name)}">${options}</select>`;
+      }
+
+      const installBtn = installed
+        ? '<span class="badge badge-on">已安装</span>'
+        : (hasMultipleVersions
+          ? `${versionSelect}<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}', true)">安装</button>`
+          : `<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}')">安装</button>`
+        );
 
       return `
         <div class="plugin-item" style="animation-delay:${i * 0.05}s">
@@ -260,10 +280,7 @@
           </div>
           <div class="plugin-meta">
             <span class="badge badge-ver">v${esc(p.latest_version)}</span>
-            ${installed
-              ? '<span class="badge badge-on">已安装</span>'
-              : `<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}')">安装</button>`
-            }
+            ${installBtn}
             <a class="gh-link" href="${ghUrl}" target="_blank" title="GitHub">🔗</a>
           </div>
         </div>
@@ -350,18 +367,36 @@
     }
   };
 
-  window.installPlugin = async function (name) {
-    const ok = await showConfirm('安装插件', `确定要从注册表安装插件 ${name} 吗？`);
+  window.installPlugin = async function (name, hasVersionSelect) {
+    let version = '';
+    if (hasVersionSelect) {
+      const sel = document.getElementById('ver-' + name);
+      if (sel) version = sel.value;
+    }
+
+    const verLabel = version ? ` v${version}` : '';
+    const ok = await showConfirm('安装插件', `确定要从注册表安装插件 ${name}${verLabel} 吗？`);
     if (!ok) return;
 
     try {
-      const resp = await fetch(apiUrl(`/api/plugins/install/${encodeURIComponent(name)}`), { method: 'POST' });
+      let url = `/api/plugins/install/${encodeURIComponent(name)}`;
+      if (version) url += `?version=${encodeURIComponent(version)}`;
+
+      // 禁用安装按钮并显示 loading
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '安装中...';
+
+      const resp = await fetch(apiUrl(url), { method: 'POST' });
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) {
         refreshInstalled();
         refreshStore();
         refreshStatus();
+      } else {
+        btn.disabled = false;
+        btn.textContent = '安装';
       }
     } catch (e) {
       showToast('请求失败: ' + e.message, false);
@@ -524,5 +559,150 @@
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // ── 配置编辑器 ─────────────────────────
+  let currentConfig = null;
+
+  async function refreshConfig() {
+    try {
+      // 加载配置路径
+      const pathResp = await fetch(apiUrl('/api/config/path'));
+      const pathData = await pathResp.json();
+      document.getElementById('config-path').textContent = '配置文件: ' + pathData.path;
+
+      // 加载配置内容
+      const resp = await fetch(apiUrl('/api/config'));
+      const data = await resp.json();
+      if (!data.ok) {
+        showToast(data.message, false);
+        return;
+      }
+      currentConfig = data.config;
+
+      // 填充表单
+      fillConfigForm(currentConfig);
+
+      // 加载原始 TOML
+      refreshRawConfig();
+    } catch (e) {
+      showToast('加载配置失败: ' + e.message, false);
+    }
+  }
+
+  function fillConfigForm(config) {
+    if (config.napcat) {
+      setVal('cfg-ws-client-host', config.napcat.ws_client_host);
+      setVal('cfg-ws-client-port', config.napcat.ws_client_port);
+      setVal('cfg-ws-server-host', config.napcat.ws_server_host);
+      setVal('cfg-ws-server-port', config.napcat.ws_server_port);
+      setVal('cfg-timeout', config.napcat.timeout_seconds);
+      setVal('cfg-napcat-token', config.napcat.token);
+    }
+    if (config.logging) {
+      setVal('cfg-log-level', config.logging.level);
+    }
+    if (config.plugins) {
+      setCheck('cfg-plugins-enabled', config.plugins.enabled);
+      setVal('cfg-plugin-dir', config.plugins.plugin_dir);
+      setCheck('cfg-auto-load', config.plugins.auto_load);
+    }
+    if (config.webui) {
+      setVal('cfg-webui-host', config.webui.host);
+      setVal('cfg-webui-port', config.webui.port);
+      setVal('cfg-webui-token', config.webui.token);
+    }
+  }
+
+  function setVal(id, val) {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null) el.value = val;
+  }
+
+  function setCheck(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!val;
+  }
+
+  function getVal(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  function getCheck(id) {
+    const el = document.getElementById(id);
+    return el ? el.checked : false;
+  }
+
+  window.saveConfig = async function () {
+    const config = {
+      napcat: {
+        ws_client_host: getVal('cfg-ws-client-host'),
+        ws_client_port: parseInt(getVal('cfg-ws-client-port'), 10) || 0,
+        ws_server_host: getVal('cfg-ws-server-host'),
+        ws_server_port: parseInt(getVal('cfg-ws-server-port'), 10) || 0,
+        timeout_seconds: parseInt(getVal('cfg-timeout'), 10) || 10,
+        token: getVal('cfg-napcat-token'),
+      },
+      logging: {
+        level: getVal('cfg-log-level'),
+      },
+      plugins: {
+        enabled: getCheck('cfg-plugins-enabled'),
+        plugin_dir: getVal('cfg-plugin-dir'),
+        auto_load: getCheck('cfg-auto-load'),
+      },
+      webui: {
+        host: getVal('cfg-webui-host'),
+        port: parseInt(getVal('cfg-webui-port'), 10) || 27080,
+        token: getVal('cfg-webui-token'),
+      },
+    };
+
+    try {
+      const resp = await fetch(apiUrl('/api/config'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+    } catch (e) {
+      showToast('保存配置失败: ' + e.message, false);
+    }
+  };
+
+  window.resetConfig = function () {
+    if (currentConfig) {
+      fillConfigForm(currentConfig);
+      showToast('已重置为上次加载的配置', true);
+    }
+  };
+
+  async function refreshRawConfig() {
+    try {
+      const resp = await fetch(apiUrl('/api/config/raw'));
+      const data = await resp.json();
+      if (data.ok) {
+        document.getElementById('config-raw').value = data.content;
+      }
+    } catch (e) {
+      console.error('加载原始配置失败:', e);
+    }
+  }
+
+  window.saveRawConfig = async function () {
+    const content = document.getElementById('config-raw').value;
+    try {
+      const resp = await fetch(apiUrl('/api/config/raw'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+    } catch (e) {
+      showToast('保存配置失败: ' + e.message, false);
+    }
+  };
 
 })();

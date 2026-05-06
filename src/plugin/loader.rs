@@ -122,7 +122,7 @@ impl PluginLoader {
     }
 
     /// 为插件在各 topic 上创建 subscriber
-    fn create_subscribers(plugin_name: &str) -> HashMap<String, usize> {
+    pub(crate) fn create_subscribers(plugin_name: &str) -> HashMap<String, usize> {
         info!("[loader] 为插件 {} 创建 subscriber...", plugin_name);
         let topics = [TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_TASK, TOPIC_SEND];
         let mut ids = HashMap::new();
@@ -147,7 +147,7 @@ impl PluginLoader {
     /// 1. 尝试获取 `luo9_init_subscribers` 符号并调用（传递预创建的 subscriber ID）
     /// 2. 获取 `plugin_main` 符号并调用
     /// 3. 插件正常退出或 panic 均只记录日志，不影响主程序
-    fn run_plugin(lib: Arc<Library>, plugin_name: &str, subscriber_ids: HashMap<String, usize>) {
+    pub(crate) fn run_plugin(lib: Arc<Library>, plugin_name: &str, subscriber_ids: HashMap<String, usize>) {
         unsafe {
             // 尝试调用 luo9_init_subscribers 传递预创建的 subscriber ID
             // 使用 repr(C) 兼容的裸结构体定义，避免跨 crate 类型匹配问题
@@ -226,5 +226,62 @@ impl PluginLoader {
     /// 重新加载单个插件（卸载后重新加载）
     pub fn reload_single(&self, path: &Path, id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
         self.load_single(path, id)
+    }
+}
+
+/// 独立的单个插件加载函数（供 enable_plugin / reload_plugin 调用）
+///
+/// 与 `PluginLoader::load_single` 逻辑相同，但不依赖 PluginLoader 实例。
+pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
+    unsafe {
+        let lib = Arc::new(
+            Library::new(path)
+                .map_err(|e| format!("加载动态库失败: {}", e))?
+        );
+
+        let has_main = lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok();
+
+        let plugin_name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let info = PluginInfo {
+            id: default_id,
+            name: plugin_name.clone(),
+            version: String::new(),
+            enabled: has_main,
+            path: Some(path.to_string_lossy().to_string()),
+            priority: 0,
+            block_enabled: false,
+            active: has_main,
+        };
+
+        let handle = if has_main {
+            let subscriber_ids = PluginLoader::create_subscribers(&plugin_name);
+
+            let lib_clone = Arc::clone(&lib);
+            let subs = subscriber_ids.clone();
+            let name = plugin_name.clone();
+            let thread_handle = std::thread::spawn(move || {
+                PluginLoader::run_plugin(lib_clone, &name, subs);
+            });
+
+            Some(PluginHandle {
+                name: plugin_name,
+                lib,
+                thread_handle: Some(thread_handle),
+                subscriber_ids,
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                path: path.to_path_buf(),
+            })
+        } else {
+            warn!("插件 {} 未导出 plugin_main，跳过", plugin_name);
+            None
+        };
+
+        Ok((info, handle))
     }
 }

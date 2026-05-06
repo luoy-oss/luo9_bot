@@ -77,6 +77,25 @@ pub fn dispatch_notice(notice: Notice) {
     priority_dispatch_notice(notice);
 }
 
+/// 启用插件（运行时热加载）
+pub async fn enable_plugin(
+    name: &str,
+    path: &std::path::Path,
+    config_entries: &[crate::config::PluginEntry],
+) -> Result<String, String> {
+    let mut manager = GLOBAL_PLUGIN_MANAGER.lock().await;
+    manager.enable_plugin(name, path, config_entries).await
+}
+
+/// 热重载插件（禁用后重新加载）
+pub async fn reload_plugin(
+    name: &str,
+    config_entries: &[crate::config::PluginEntry],
+) -> Result<String, String> {
+    let mut manager = GLOBAL_PLUGIN_MANAGER.lock().await;
+    manager.reload_plugin(name, config_entries).await
+}
+
 /// 获取插件系统状态
 pub async fn status() -> String {
     get_manager_stats().await

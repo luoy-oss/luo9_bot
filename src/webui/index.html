@@ -43,6 +43,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="installed">🧩 已安装</button>
     <button class="tab" data-tab="store">🏪 插件商店</button>
+    <button class="tab" data-tab="config">⚙️ 配置</button>
     <button class="tab" data-tab="logs">📜 日志</button>
   </div>
 
@@ -87,6 +88,97 @@
         <div class="icon">⏳</div>
         <div>正在加载注册表...</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Tab: 配置 -->
+  <div class="tab-content" id="tab-config">
+    <div class="section">
+      <div class="section-title">📝 配置文件</div>
+      <div class="config-path" id="config-path"></div>
+
+      <div class="config-form" id="config-form">
+        <!-- Napcat 配置 -->
+        <div class="config-group">
+          <h3>🔌 Napcat 连接</h3>
+          <label>WebSocket 客户端主机
+            <input type="text" id="cfg-ws-client-host" placeholder="0.0.0.0">
+          </label>
+          <label>WebSocket 客户端端口
+            <input type="number" id="cfg-ws-client-port" placeholder="7000">
+          </label>
+          <label>WebSocket 服务端主机
+            <input type="text" id="cfg-ws-server-host" placeholder="127.0.0.1">
+          </label>
+          <label>WebSocket 服务端端口
+            <input type="number" id="cfg-ws-server-port" placeholder="3000">
+          </label>
+          <label>连接超时（秒）
+            <input type="number" id="cfg-timeout" placeholder="10">
+          </label>
+          <label>Token
+            <input type="text" id="cfg-napcat-token" placeholder="token">
+          </label>
+        </div>
+
+        <!-- 日志配置 -->
+        <div class="config-group">
+          <h3>📋 日志</h3>
+          <label>日志级别
+            <select id="cfg-log-level">
+              <option value="trace">TRACE</option>
+              <option value="debug">DEBUG</option>
+              <option value="info">INFO</option>
+              <option value="warn">WARN</option>
+              <option value="error">ERROR</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- 插件配置 -->
+        <div class="config-group">
+          <h3>🧩 插件系统</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-plugins-enabled">
+            启用插件系统
+          </label>
+          <label>插件目录
+            <input type="text" id="cfg-plugin-dir" placeholder="plugins">
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-auto-load">
+            自动加载插件
+          </label>
+        </div>
+
+        <!-- WebUI 配置 -->
+        <div class="config-group">
+          <h3>🌐 WebUI</h3>
+          <label>绑定主机
+            <input type="text" id="cfg-webui-host" placeholder="0.0.0.0">
+          </label>
+          <label>端口
+            <input type="number" id="cfg-webui-port" placeholder="27080">
+          </label>
+          <label>Token（留空则自动生成）
+            <input type="text" id="cfg-webui-token" placeholder="留空自动生成">
+          </label>
+        </div>
+
+        <div class="config-actions">
+          <button class="btn btn-accent" onclick="saveConfig()">💾 保存配置</button>
+          <button class="btn" onclick="resetConfig()">↩️ 重置</button>
+        </div>
+      </div>
+
+      <!-- 原始 TOML 编辑器 -->
+      <details class="config-raw-section">
+        <summary>📄 原始 TOML 编辑</summary>
+        <textarea id="config-raw" rows="24" spellcheck="false" placeholder="加载中..."></textarea>
+        <div class="config-actions">
+          <button class="btn btn-accent" onclick="saveRawConfig()">保存原始配置</button>
+        </div>
+      </details>
     </div>
   </div>
 

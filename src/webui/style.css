@@ -442,6 +442,136 @@ body {
 
 .empty .icon { font-size: 2.5em; margin-bottom: 12px; }
 
+/* ── Config Editor ─────────────────────── */
+.config-path {
+  font-size: 0.82em;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  word-break: break-all;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.config-group {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.config-group h3 {
+  margin: 0 0 16px;
+  font-size: 0.95em;
+  color: var(--accent-dark);
+}
+
+.config-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 0.82em;
+  color: var(--text-light);
+}
+
+.config-group label:last-child {
+  margin-bottom: 0;
+}
+
+.config-group input[type="text"],
+.config-group input[type="number"],
+.config-group select {
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+  background: var(--card);
+  color: var(--text);
+  transition: border-color var(--transition);
+}
+
+.config-group input:focus,
+.config-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.config-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.config-raw-section {
+  margin-top: 20px;
+}
+
+.config-raw-section summary {
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--text-light);
+  padding: 8px 0;
+}
+
+.config-raw-section textarea {
+  width: 100%;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.82em;
+  line-height: 1.6;
+  background: #1e1b2e;
+  color: #d0cce0;
+  resize: vertical;
+  tab-size: 4;
+}
+
+.config-raw-section textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.config-raw-section .config-actions {
+  margin-top: 12px;
+}
+
+/* ── Version Select ────────────────────── */
+.version-select {
+  padding: 4px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75em;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.version-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* ── Animations ────────────────────────── */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

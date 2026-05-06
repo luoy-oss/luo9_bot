@@ -113,6 +113,51 @@ struct AvailablePlugin {
     sdk_version: String,
     installed: bool,
     installed_version: Option<String>,
+    #[serde(default)]
+    versions: Vec<RegistryVersion>,
+}
+
+/// 配置更新请求
+#[derive(Deserialize)]
+struct ConfigUpdateRequest {
+    napcat: Option<NapcatConfigReq>,
+    logging: Option<LoggingConfigReq>,
+    plugins: Option<PluginConfigReq>,
+    webui: Option<WebuiConfigReq>,
+}
+
+#[derive(Deserialize)]
+struct NapcatConfigReq {
+    ws_client_host: Option<String>,
+    ws_client_port: Option<u16>,
+    ws_server_host: Option<String>,
+    ws_server_port: Option<u16>,
+    timeout_seconds: Option<u64>,
+    token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LoggingConfigReq {
+    level: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PluginConfigReq {
+    enabled: Option<bool>,
+    plugin_dir: Option<String>,
+    auto_load: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct WebuiConfigReq {
+    host: Option<String>,
+    port: Option<u16>,
+    token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawConfigUpdate {
+    content: String,
 }
 
 // ========== 启动服务 ==========
@@ -166,6 +211,8 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/registry", get(api_registry))
         .route("/api/logs", get(api_logs))
         .route("/api/config/path", get(api_config_path))
+        .route("/api/config", get(api_config_get).put(api_config_put))
+        .route("/api/config/raw", get(api_config_raw_get).put(api_config_raw_put))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
@@ -341,12 +388,12 @@ async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse
             sdk_version: latest.map(|v| v.sdk_version.clone()).unwrap_or_default(),
             installed: inst.is_some(),
             installed_version: inst.map(|_| {
-                // 已安装但不知道具体版本，显示文件名
                 installed_map
                     .get(name.as_str())
                     .map(|p| p.file.clone())
                     .unwrap_or_default()
             }),
+            versions: plugin.versions.clone(),
         });
     }
 
@@ -355,10 +402,16 @@ async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse
     Json(available).into_response()
 }
 
+#[derive(Deserialize)]
+struct InstallQuery {
+    version: Option<String>,
+}
+
 /// 从注册表安装插件
 async fn api_plugin_install(
     State(state): State<Arc<WebuiState>>,
     Path(name): Path<String>,
+    Query(q): Query<InstallQuery>,
 ) -> impl IntoResponse {
     let registry = match fetch_registry().await {
         Ok(r) => r,
@@ -370,19 +423,27 @@ async fn api_plugin_install(
         None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 不在注册表中")),
     };
 
-    let latest = match plugin.versions.first() {
-        Some(v) => v,
-        None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有可用版本")),
+    // 查找指定版本，或使用最新版本
+    let version_entry = if let Some(ref ver) = q.version {
+        match plugin.versions.iter().find(|v| v.version == *ver) {
+            Some(v) => v,
+            None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}")),
+        }
+    } else {
+        match plugin.versions.first() {
+            Some(v) => v,
+            None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有可用版本")),
+        }
     };
 
     // 确定平台和资源文件名
     let platform_key = detect_platform();
-    let asset_name = match latest.assets.get(&platform_key) {
+    let asset_name = match version_entry.assets.get(&platform_key) {
         Some(a) => a.clone(),
         None => {
             return json_err(
                 StatusCode::BAD_REQUEST,
-                &format!("插件 {name} 不支持当前平台 {platform_key}"),
+                &format!("插件 {name} v{} 不支持当前平台 {platform_key}", version_entry.version),
             )
         }
     };
@@ -390,10 +451,10 @@ async fn api_plugin_install(
     // 构建下载 URL
     let download_url = format!(
         "https://github.com/{}/releases/download/{}/{}",
-        plugin.repo, latest.tag, asset_name
+        plugin.repo, version_entry.tag, asset_name
     );
 
-    info!("正在下载插件: {} v{} ({})", name, latest.version, download_url);
+    info!("正在下载插件: {} v{} ({})", name, version_entry.version, download_url);
 
     // 下载文件
     let client = reqwest::Client::new();
@@ -432,11 +493,27 @@ async fn api_plugin_install(
         return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存文件失败: {e}"));
     }
 
-    info!("插件安装成功: {} v{} -> {}", name, latest.version, target.display());
-    json_ok(&format!(
-        "插件 {} v{} 安装成功，重启后生效",
-        name, latest.version
-    ))
+    info!("插件安装成功: {} v{} -> {}", name, version_entry.version, target.display());
+
+    // 自动加载插件（无需重启）
+    let config = crate::config::LNConfig::load();
+    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+    match crate::plugin::enable_plugin(&name, &target, &config_entries).await {
+        Ok(msg) => {
+            info!("插件 {} 已自动加载: {}", name, msg);
+            json_ok(&format!(
+                "插件 {} v{} 安装成功并已加载",
+                name, version_entry.version
+            ))
+        }
+        Err(e) => {
+            warn!("插件 {} 安装成功但自动加载失败: {}", name, e);
+            json_ok(&format!(
+                "插件 {} v{} 安装成功，但自动加载失败: {}",
+                name, version_entry.version, e
+            ))
+        }
+    }
 }
 
 // ========== 插件管理 API ==========
@@ -460,12 +537,24 @@ async fn api_plugin_enable(
         .to_string();
     let enabled_path = dir.join(&original_name);
 
+    // 重命名文件
     if let Err(e) = fs::rename(&disabled_path, &enabled_path) {
         return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("启用失败: {e}"));
     }
 
-    info!("插件已启用: {name}");
-    json_ok(&format!("插件 {name} 已启用，重启后生效"))
+    // 运行时加载插件
+    let config = crate::config::LNConfig::load();
+    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+    match crate::plugin::enable_plugin(&name, &enabled_path, &config_entries).await {
+        Ok(msg) => {
+            info!("{}", msg);
+            json_ok(&format!("插件 {name} 已启用并加载"))
+        }
+        Err(e) => {
+            warn!("插件 {name} 文件已恢复但运行时加载失败: {e}");
+            json_ok(&format!("插件 {name} 文件已恢复，但运行时加载失败: {e}"))
+        }
+    }
 }
 
 async fn api_plugin_disable(
@@ -486,12 +575,18 @@ async fn api_plugin_disable(
         .to_string();
     let disabled_path = dir.join(format!("{file_name}.disabled"));
 
-    // 运行时禁用（取消订阅，等待线程退出）
+    // 运行时禁用（取消订阅，等待线程退出，释放 DLL 锁）
     {
         let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
         match manager.disable_plugin(&name).await {
             Ok(msg) => info!("{}", msg),
-            Err(e) => warn!("运行时禁用插件 {} 失败: {}", name, e),
+            Err(e) => {
+                // 如果不是"已经禁用"的错误，则中止文件重命名
+                if !e.contains("已经是禁用状态") {
+                    return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("运行时禁用失败: {e}"));
+                }
+                warn!("插件 {} 运行时状态: {}", name, e);
+            }
         }
     }
 
@@ -508,18 +603,18 @@ async fn api_plugin_disable(
 async fn api_plugin_reload(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-    match manager.disable_plugin(&name).await {
-        Ok(_) => {}
+    let config = crate::config::LNConfig::load();
+    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+
+    match crate::plugin::reload_plugin(&name, &config_entries).await {
+        Ok(msg) => {
+            info!("{}", msg);
+            json_ok(&msg)
+        }
         Err(e) => {
-            // 如果插件已经是禁用状态，仍然尝试重新加载
-            if !e.contains("已经是禁用状态") {
-                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("禁用失败: {e}"));
-            }
+            json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("热重载失败: {e}"))
         }
     }
-    // TODO: 实现重新加载逻辑（需要 loader 支持单个插件重新加载）
-    json_ok(&format!("插件 {name} 已禁用，需要重启才能重新加载"))
 }
 
 /// 设置插件优先级
@@ -684,6 +779,116 @@ async fn api_logs(Query(q): Query<LogQuery>) -> impl IntoResponse {
     };
 
     Json(LogResponse { lines, total })
+}
+
+// ========== 配置 API ==========
+
+/// 获取当前配置（JSON 格式）
+async fn api_config_get() -> impl IntoResponse {
+    match crate::config::LNConfig::load() {
+        Ok(config) => Json(serde_json::json!({
+            "ok": true,
+            "config": {
+                "napcat": {
+                    "ws_client_host": config.napcat.ws_client_host,
+                    "ws_client_port": config.napcat.ws_client_port,
+                    "ws_server_host": config.napcat.ws_server_host,
+                    "ws_server_port": config.napcat.ws_server_port,
+                    "timeout_seconds": config.napcat.timeout_seconds,
+                    "token": config.napcat.token,
+                },
+                "logging": {
+                    "level": config.logging.level,
+                },
+                "plugins": {
+                    "enabled": config.plugins.enabled,
+                    "plugin_dir": config.plugins.plugin_dir,
+                    "auto_load": config.plugins.auto_load,
+                },
+                "webui": {
+                    "host": config.webui.host,
+                    "port": config.webui.port,
+                    "token": config.webui.token,
+                },
+            }
+        })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"ok": false, "message": format!("加载配置失败: {e}")})),
+        ).into_response(),
+    }
+}
+
+/// 更新配置（JSON 格式，合并更新）
+async fn api_config_put(Json(req): Json<ConfigUpdateRequest>) -> impl IntoResponse {
+    let mut config = match crate::config::LNConfig::load() {
+        Ok(c) => c,
+        Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+    };
+
+    if let Some(napcat) = req.napcat {
+        if let Some(v) = napcat.ws_client_host { config.napcat.ws_client_host = v; }
+        if let Some(v) = napcat.ws_client_port { config.napcat.ws_client_port = v; }
+        if let Some(v) = napcat.ws_server_host { config.napcat.ws_server_host = v; }
+        if let Some(v) = napcat.ws_server_port { config.napcat.ws_server_port = v; }
+        if let Some(v) = napcat.timeout_seconds { config.napcat.timeout_seconds = v; }
+        if let Some(v) = napcat.token { config.napcat.token = v; }
+    }
+
+    if let Some(logging) = req.logging {
+        if let Some(v) = logging.level { config.logging.level = v; }
+    }
+
+    if let Some(plugins) = req.plugins {
+        if let Some(v) = plugins.enabled { config.plugins.enabled = v; }
+        if let Some(v) = plugins.plugin_dir { config.plugins.plugin_dir = v; }
+        if let Some(v) = plugins.auto_load { config.plugins.auto_load = v; }
+    }
+
+    if let Some(webui) = req.webui {
+        if let Some(v) = webui.host { config.webui.host = v; }
+        if let Some(v) = webui.port { config.webui.port = v; }
+        if let Some(v) = webui.token { config.webui.token = v; }
+    }
+
+    if let Err(e) = config.save() {
+        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+    }
+
+    info!("配置已更新");
+    json_ok("配置已保存")
+}
+
+/// 获取原始 TOML 配置
+async fn api_config_raw_get() -> impl IntoResponse {
+    let path = crate::config::LNConfig::config_path();
+    match fs::read_to_string(&path) {
+        Ok(content) => Json(serde_json::json!({
+            "ok": true,
+            "path": path.to_string_lossy(),
+            "content": content,
+        })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"ok": false, "message": format!("读取配置失败: {e}")})),
+        ).into_response(),
+    }
+}
+
+/// 更新原始 TOML 配置
+async fn api_config_raw_put(Json(req): Json<RawConfigUpdate>) -> impl IntoResponse {
+    // 验证 TOML 格式是否合法
+    if let Err(e) = toml::from_str::<crate::config::LNConfig>(&req.content) {
+        return json_err(StatusCode::BAD_REQUEST, &format!("TOML 格式错误: {e}"));
+    }
+
+    let path = crate::config::LNConfig::config_path();
+    if let Err(e) = fs::write(&path, &req.content) {
+        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("写入配置失败: {e}"));
+    }
+
+    info!("原始配置已更新");
+    json_ok("配置已保存，重启后生效")
 }
 
 // ========== 辅助函数 ==========
