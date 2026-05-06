@@ -68,6 +68,7 @@
     initUpload();
     initLogs();
     initConfirm();
+    initDownloadProgress();
     refreshAll();
     // 定时刷新状态
     setInterval(refreshStatus, 10000);
@@ -387,6 +388,9 @@
       btn.disabled = true;
       btn.textContent = '安装中...';
 
+      // 显示下载进度面板
+      showDownloadProgress(name);
+
       const resp = await fetch(apiUrl(url), { method: 'POST' });
       const data = await resp.json();
       showToast(data.message, data.ok);
@@ -402,6 +406,99 @@
       showToast('请求失败: ' + e.message, false);
     }
   };
+
+  // ── 下载进度 ───────────────────────────
+  let downloadEventSource = null;
+
+  function initDownloadProgress() {
+    // 建立 SSE 连接接收下载进度
+    function connectSSE() {
+      if (downloadEventSource) {
+        downloadEventSource.close();
+      }
+
+      downloadEventSource = new EventSource(apiUrl('/api/download-progress'));
+
+      downloadEventSource.onmessage = function (event) {
+        try {
+          const progress = JSON.parse(event.data);
+          updateDownloadProgress(progress);
+
+          // 下载完成或失败时，延迟隐藏进度面板
+          if (progress.status === 'success' || progress.status === 'error') {
+            setTimeout(() => hideDownloadProgress(), 3000);
+          }
+        } catch (e) {
+          console.error('解析下载进度失败:', e);
+        }
+      };
+
+      downloadEventSource.onerror = function () {
+        // 连接断开时重连
+        setTimeout(connectSSE, 5000);
+      };
+    }
+
+    connectSSE();
+  }
+
+  function showDownloadProgress(pluginName) {
+    let panel = document.getElementById('download-progress');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'download-progress';
+      panel.className = 'download-progress';
+      document.body.appendChild(panel);
+    }
+
+    panel.innerHTML = `
+      <div class="download-progress-header">
+        <span class="download-progress-icon">📦</span>
+        <span class="download-progress-title">正在安装 ${esc(pluginName)}</span>
+      </div>
+      <div class="download-progress-bar-container">
+        <div class="download-progress-bar" id="download-progress-bar"></div>
+      </div>
+      <div class="download-progress-message" id="download-progress-message">准备中...</div>
+    `;
+
+    panel.classList.add('show');
+  }
+
+  function updateDownloadProgress(progress) {
+    const bar = document.getElementById('download-progress-bar');
+    const message = document.getElementById('download-progress-message');
+
+    if (bar && progress.progress !== null && progress.progress !== undefined) {
+      bar.style.width = `${Math.round(progress.progress * 100)}%`;
+
+      // 根据状态改变颜色
+      if (progress.status === 'error') {
+        bar.classList.add('error');
+      } else if (progress.status === 'success') {
+        bar.classList.add('success');
+      }
+    }
+
+    if (message) {
+      message.textContent = progress.message;
+
+      // 根据状态改变样式
+      if (progress.status === 'error') {
+        message.classList.add('error');
+      } else if (progress.status === 'success') {
+        message.classList.add('success');
+      }
+    }
+  }
+
+  function hideDownloadProgress() {
+    const panel = document.getElementById('download-progress');
+    if (panel) {
+      panel.classList.remove('show');
+      setTimeout(() => panel.remove(), 300);
+    }
+  }
 
   // ── 上传 ───────────────────────────────
   function initUpload() {
