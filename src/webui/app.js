@@ -119,9 +119,8 @@
     try {
       const resp = await fetch(apiUrl('/api/status'));
       const data = await resp.json();
-      // 更新本地运行时间基准
-      uptimeBase = data.uptime_secs;
-      uptimeTimestamp = Date.now();
+      // 更新启动时间戳
+      startTimestamp = data.start_timestamp;
       updateLocalUptime();
       document.getElementById('stat-plugins').textContent = data.plugin_count;
       document.getElementById('stat-dir').textContent = data.plugin_dir;
@@ -145,22 +144,20 @@
   }
 
   // ── 本地运行时间更新 ─────────────────────
-  let uptimeBase = 0;        // 服务器返回的基准运行秒数
-  let uptimeTimestamp = 0;    // 获取基准时的时间戳
+  let startTimestamp = 0;    // 服务器启动的 Unix 时间戳（秒）
 
   function updateLocalUptime() {
-    if (uptimeTimestamp === 0) return;
-    const elapsed = Math.floor((Date.now() - uptimeTimestamp) / 1000);
-    const total = uptimeBase + elapsed;
+    if (startTimestamp === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const uptime = now - startTimestamp;
     const el = document.getElementById('stat-uptime');
-    if (el) el.textContent = formatUptime(total);
+    if (el) el.textContent = formatUptime(Math.max(0, uptime));
   }
 
   // ── 页面可见性处理 ───────────────────────
   function initVisibilityHandler() {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        // 页面重新可见，立即刷新状态
         refreshStatus();
       }
     });

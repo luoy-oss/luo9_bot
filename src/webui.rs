@@ -108,7 +108,8 @@ pub struct MirrorCache {
 
 pub struct WebuiState {
     pub plugin_dir: String,
-    pub start_time: std::time::Instant,
+    /// 启动时的 Unix 时间戳（秒）
+    pub start_timestamp: u64,
     pub token: String,
     pub progress_tx: broadcast::Sender<DownloadProgress>,
     /// 镜像健康检查缓存
@@ -132,7 +133,8 @@ struct PluginInfo {
 
 #[derive(Serialize)]
 struct StatusResponse {
-    uptime_secs: u64,
+    /// 启动时间的 Unix 时间戳（秒）
+    start_timestamp: u64,
     plugin_count: usize,
     plugins: Vec<PluginInfo>,
     plugin_dir: String,
@@ -260,7 +262,10 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
 
     let state = Arc::new(WebuiState {
         plugin_dir,
-        start_time: std::time::Instant::now(),
+        start_timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
         token: token.clone(),
         progress_tx,
         mirror_cache: mirror_cache.clone(),
@@ -570,7 +575,7 @@ async fn api_mirrors(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
 async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
     let plugins = scan_plugins(&state.plugin_dir);
     let resp = StatusResponse {
-        uptime_secs: state.start_time.elapsed().as_secs(),
+        start_timestamp: state.start_timestamp,
         plugin_count: plugins.len(),
         plugins,
         plugin_dir: state.plugin_dir.clone(),
