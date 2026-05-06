@@ -75,10 +75,10 @@ impl PluginLoader {
             // 检查是否导出了 plugin_main
             let has_main = lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok();
 
-            let plugin_name = path.file_stem()
+            let file_name = path.file_name()
                 .and_then(|s| s.to_str())
-                .unwrap_or("unknown")
-                .to_string();
+                .unwrap_or("unknown");
+            let plugin_name = extract_display_name(file_name);
 
             let info = PluginInfo {
                 id: default_id,

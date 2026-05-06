@@ -314,10 +314,30 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = format!("{}:{}", host, port);
-    info!("WebUI 启动于 http://{}?token={}", addr, token);
+    // 端口被占用时自动自增，最多尝试 20 次
+    let start_port = port as u32;
+    let mut port = start_port;
+    let listener = loop {
+        let addr = format!("{}:{}", host, port);
+        match tokio::net::TcpListener::bind(&addr).await {
+            Ok(l) => break l,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::AddrInUse {
+                    warn!("端口 {} 被占用，尝试 {}...", port, port + 1);
+                    port += 1;
+                    if port > 65535 || port - start_port >= 20 {
+                        panic!("WebUI 无法绑定端口: {}~{} 均被占用", start_port, port - 1);
+                    }
+                } else {
+                    panic!("WebUI 绑定端口失败: {}", e);
+                }
+            }
+        }
+    };
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let actual_port = listener.local_addr().unwrap().port();
+    info!("WebUI 启动于 http://{}:{}?token={}", host, actual_port, token);
+
     axum::serve(listener, app).await.unwrap();
 }
 

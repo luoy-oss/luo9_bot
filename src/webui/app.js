@@ -69,9 +69,15 @@
     initLogs();
     initConfirm();
     initDownloadProgress();
+    initVisibilityHandler();
     refreshAll();
-    // 定时刷新状态
-    setInterval(refreshStatus, 10000);
+
+    // 本地运行时间每秒更新（不请求服务器）
+    setInterval(updateLocalUptime, 1000);
+    // 状态定时刷新（10 秒）
+    setInterval(() => {
+      if (!document.hidden) refreshStatus();
+    }, 10000);
   });
 
   // ── API 请求辅助 ─────────────────────
@@ -113,7 +119,10 @@
     try {
       const resp = await fetch(apiUrl('/api/status'));
       const data = await resp.json();
-      document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_secs);
+      // 更新本地运行时间基准
+      uptimeBase = data.uptime_secs;
+      uptimeTimestamp = Date.now();
+      updateLocalUptime();
       document.getElementById('stat-plugins').textContent = data.plugin_count;
       document.getElementById('stat-dir').textContent = data.plugin_dir;
       const verEl = document.getElementById('bot-version');
@@ -133,6 +142,28 @@
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     return h + '时' + m + '分';
+  }
+
+  // ── 本地运行时间更新 ─────────────────────
+  let uptimeBase = 0;        // 服务器返回的基准运行秒数
+  let uptimeTimestamp = 0;    // 获取基准时的时间戳
+
+  function updateLocalUptime() {
+    if (uptimeTimestamp === 0) return;
+    const elapsed = Math.floor((Date.now() - uptimeTimestamp) / 1000);
+    const total = uptimeBase + elapsed;
+    const el = document.getElementById('stat-uptime');
+    if (el) el.textContent = formatUptime(total);
+  }
+
+  // ── 页面可见性处理 ───────────────────────
+  function initVisibilityHandler() {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // 页面重新可见，立即刷新状态
+        refreshStatus();
+      }
+    });
   }
 
   // ── 已安装插件 ─────────────────────────
@@ -612,6 +643,7 @@
 
   // 定时拉取日志
   setInterval(() => {
+    if (document.hidden) return;
     const logsTab = document.getElementById('tab-logs');
     if (logsTab && logsTab.classList.contains('active')) {
       refreshLogs();
