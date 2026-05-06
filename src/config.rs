@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
+use std::path::PathBuf;
 use crate::error::Result;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -8,6 +10,8 @@ pub struct LNConfig {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub plugins: PluginConfig,
+    #[serde(default)]
+    pub webui: WebuiConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -25,6 +29,18 @@ pub struct LoggingConfig {
     pub level: String,
 }
 
+/// 插件配置条目（存储在主配置文件的 `[[plugins.plugins]]` 数组中）
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PluginEntry {
+    pub name: String,
+    #[serde(default = "default_priority")]
+    pub priority: i32,
+    #[serde(default)]
+    pub block_enabled: bool,
+}
+
+fn default_priority() -> i32 { 0 }
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginConfig {
     #[serde(default = "default_enabled")]
@@ -34,7 +50,7 @@ pub struct PluginConfig {
     #[serde(default = "default_auto_load")]
     pub auto_load: bool,
     #[serde(default)]
-    pub plugins: Vec<String>,
+    pub plugins: Vec<PluginEntry>,
 }
 
 impl Default for PluginConfig {
@@ -46,6 +62,42 @@ impl Default for PluginConfig {
             plugins: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WebuiConfig {
+    #[serde(default = "default_webui_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_webui_host")]
+    pub host: String,
+    #[serde(default = "default_webui_port")]
+    pub port: u16,
+    /// WebUI 访问 token，为空时每次启动随机生成
+    #[serde(default)]
+    pub token: String,
+}
+
+impl Default for WebuiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_webui_enabled(),
+            host: default_webui_host(),
+            port: default_webui_port(),
+            token: String::new(),
+        }
+    }
+}
+
+fn default_webui_enabled() -> bool {
+    true
+}
+
+fn default_webui_host() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_webui_port() -> u16 {
+    27080
 }
 
 fn default_enabled() -> bool {
@@ -61,13 +113,61 @@ fn default_auto_load() -> bool {
 }
 
 impl LNConfig {
+    /// 解析配置文件路径，优先级：
+    /// 1. 环境变量 LUO9_CONFIG
+    /// 2. ~/.luo9/config/default.toml
+    /// 3. config/default.toml（向后兼容）
+    pub fn config_path() -> PathBuf {
+        if let Ok(path) = env::var("LUO9_CONFIG") {
+            return PathBuf::from(path);
+        }
+
+        if let Some(home) = dirs::home_dir() {
+            let luo9_path = home.join(".luo9").join("config").join("default.toml");
+            if luo9_path.exists() {
+                return luo9_path;
+            }
+        }
+
+        PathBuf::from("config/default.toml")
+    }
+
     pub fn load() -> Result<Self> {
-        let content = fs::read_to_string("config/default.toml")?;
-        
-        let config: LNConfig = toml::from_str(&content)?;
-        println!("{:?}", config);
-        
+        let path = Self::config_path();
+        let content = fs::read_to_string(&path)?;
+
+        let mut config: LNConfig = toml::from_str(&content)?;
+
+        // 环境变量覆盖插件目录
+        if let Ok(plugin_dir) = env::var("LUO9_PLUGIN_DIR") {
+            config.plugins.plugin_dir = plugin_dir;
+        }
+
         Ok(config)
+    }
+
+    /// 保存配置到文件
+    pub fn save(&self) -> Result<()> {
+        let path = Self::config_path();
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| crate::error::LNErr::Config(format!("序列化配置失败: {}", e)))?;
+        fs::write(&path, content)?;
+        Ok(())
+    }
+
+    /// 获取指定插件的配置条目
+    pub fn get_plugin_entry(&self, name: &str) -> Option<&PluginEntry> {
+        self.plugins.plugins.iter().find(|p| p.name == name)
+    }
+
+    /// 更新或插入插件配置条目
+    pub fn upsert_plugin_entry(&mut self, entry: PluginEntry) {
+        if let Some(existing) = self.plugins.plugins.iter_mut().find(|p| p.name == entry.name) {
+            existing.priority = entry.priority;
+            existing.block_enabled = entry.block_enabled;
+        } else {
+            self.plugins.plugins.push(entry);
+        }
     }
     
     // 修复 receiver_url 和 sender_url 方法

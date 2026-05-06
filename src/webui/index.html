@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luo9 Bot 控制台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header class="header">
+  <h1>🐾 Luo9 Bot 控制台</h1>
+  <div class="header-status">
+    <span class="status-dot"></span>
+    <span id="header-status-text">运行中</span>
+  </div>
+</header>
+
+<!-- ═══ Container ═══ -->
+<div class="container">
+
+  <!-- Stats Grid -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-icon">⏱️</div>
+      <div class="stat-value" id="stat-uptime">--</div>
+      <div class="stat-label">运行时间</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🧩</div>
+      <div class="stat-value" id="stat-plugins">--</div>
+      <div class="stat-label">已加载插件</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📁</div>
+      <div class="stat-value" id="stat-dir" style="font-size:0.8em;word-break:break-all;">--</div>
+      <div class="stat-label">插件目录</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="installed">🧩 已安装</button>
+    <button class="tab" data-tab="store">🏪 插件商店</button>
+    <button class="tab" data-tab="config">⚙️ 配置</button>
+    <button class="tab" data-tab="logs">📜 日志</button>
+  </div>
+
+  <!-- Tab: 已安装 -->
+  <div class="tab-content active" id="tab-installed">
+    <div class="section">
+      <div class="section-title">📦 已安装的插件</div>
+      <div id="installed-list"></div>
+      <div class="empty" id="installed-empty" style="display:none;">
+        <div class="icon">📭</div>
+        <div>还没有安装任何插件</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📤 上传插件</div>
+      <div class="upload-zone" id="upload-zone">
+        <div class="icon">📂</div>
+        <div>拖拽 .dll / .so 文件到这里，或点击选择</div>
+        <input type="file" id="upload-input" accept=".dll,.so" multiple hidden>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: 插件商店 -->
+  <div class="tab-content" id="tab-store">
+    <div class="section">
+      <div class="section-title">🏷️ 分类筛选</div>
+      <div class="tag-filter" id="tag-filter">
+        <button class="tag-chip active" data-tag="all">全部</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🛒 可用插件</div>
+      <div id="store-list"></div>
+      <div class="empty" id="store-empty" style="display:none;">
+        <div class="icon">🔍</div>
+        <div>暂无可用插件</div>
+      </div>
+      <div class="empty" id="store-loading">
+        <div class="icon">⏳</div>
+        <div>正在加载注册表...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: 配置 -->
+  <div class="tab-content" id="tab-config">
+    <div class="section">
+      <div class="section-title">📝 配置文件</div>
+      <div class="config-path" id="config-path"></div>
+
+      <div class="config-form" id="config-form">
+        <!-- Napcat 配置 -->
+        <div class="config-group">
+          <h3>🔌 Napcat 连接</h3>
+          <label>WebSocket 客户端主机
+            <input type="text" id="cfg-ws-client-host" placeholder="0.0.0.0">
+          </label>
+          <label>WebSocket 客户端端口
+            <input type="number" id="cfg-ws-client-port" placeholder="7000">
+          </label>
+          <label>WebSocket 服务端主机
+            <input type="text" id="cfg-ws-server-host" placeholder="127.0.0.1">
+          </label>
+          <label>WebSocket 服务端端口
+            <input type="number" id="cfg-ws-server-port" placeholder="3000">
+          </label>
+          <label>连接超时（秒）
+            <input type="number" id="cfg-timeout" placeholder="10">
+          </label>
+          <label>Token
+            <input type="text" id="cfg-napcat-token" placeholder="token">
+          </label>
+        </div>
+
+        <!-- 日志配置 -->
+        <div class="config-group">
+          <h3>📋 日志</h3>
+          <label>日志级别
+            <select id="cfg-log-level">
+              <option value="trace">TRACE</option>
+              <option value="debug">DEBUG</option>
+              <option value="info">INFO</option>
+              <option value="warn">WARN</option>
+              <option value="error">ERROR</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- 插件配置 -->
+        <div class="config-group">
+          <h3>🧩 插件系统</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-plugins-enabled">
+            启用插件系统
+          </label>
+          <label>插件目录
+            <input type="text" id="cfg-plugin-dir" placeholder="plugins">
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-auto-load">
+            自动加载插件
+          </label>
+        </div>
+
+        <!-- WebUI 配置 -->
+        <div class="config-group">
+          <h3>🌐 WebUI</h3>
+          <label>绑定主机
+            <input type="text" id="cfg-webui-host" placeholder="0.0.0.0">
+          </label>
+          <label>端口
+            <input type="number" id="cfg-webui-port" placeholder="27080">
+          </label>
+          <label>Token（留空则自动生成）
+            <input type="text" id="cfg-webui-token" placeholder="留空自动生成">
+          </label>
+        </div>
+
+        <div class="config-actions">
+          <button class="btn btn-accent" onclick="saveConfig()">💾 保存配置</button>
+          <button class="btn" onclick="resetConfig()">↩️ 重置</button>
+        </div>
+      </div>
+
+      <!-- 原始 TOML 编辑器 -->
+      <details class="config-raw-section">
+        <summary>📄 原始 TOML 编辑</summary>
+        <textarea id="config-raw" rows="24" spellcheck="false" placeholder="加载中..."></textarea>
+        <div class="config-actions">
+          <button class="btn btn-accent" onclick="saveRawConfig()">保存原始配置</button>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Tab: 日志 -->
+  <div class="tab-content" id="tab-logs">
+    <div class="section">
+      <div class="section-title">📜 运行日志</div>
+      <div class="log-controls">
+        <label>
+          <input type="checkbox" id="log-auto-scroll" checked>
+          自动滚动
+        </label>
+        <span id="log-count">0 行</span>
+        <button class="btn btn-sm" id="log-refresh-btn">🔄 刷新</button>
+      </div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ Toast ═══ -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══ Confirm Dialog ═══ -->
+<div class="overlay" id="confirm-overlay">
+  <div class="dialog">
+    <h3 id="confirm-title">确认操作</h3>
+    <p id="confirm-message">确定要执行此操作吗？</p>
+    <div class="dialog-btns">
+      <button class="btn" id="confirm-cancel">取消</button>
+      <button class="btn btn-danger" id="confirm-ok">确认</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
