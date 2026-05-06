@@ -41,6 +41,9 @@ const GITHUB_RELEASE_MIRRORS: &[&str] = &[
 /// HTTP 请求超时时间
 const HTTP_TIMEOUT_SECS: u64 = 10;
 
+/// WebUI 版本号
+const WEBUI_VERSION: &str = "1.0.0";
+
 /// 镜像健康检查测试 URL（用于检测连通性）
 const MIRROR_TEST_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
 
@@ -133,6 +136,8 @@ struct StatusResponse {
     plugin_count: usize,
     plugins: Vec<PluginInfo>,
     plugin_dir: String,
+    bot_version: String,
+    webui_version: String,
 }
 
 #[derive(Deserialize)]
@@ -549,6 +554,8 @@ async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
         plugin_count: plugins.len(),
         plugins,
         plugin_dir: state.plugin_dir.clone(),
+        bot_version: env!("CARGO_PKG_VERSION").to_string(),
+        webui_version: WEBUI_VERSION.to_string(),
     };
     Json(resp)
 }
