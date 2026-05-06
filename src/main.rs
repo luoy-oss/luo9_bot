@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     let plugin_dir = ctx.config.plugins.plugin_dir.clone();
     if webui_cfg.enabled {
         tokio::spawn(async move {
-            luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir).await;
+            luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token).await;
         });
     }
 

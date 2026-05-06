@@ -22,3 +22,5 @@ plugins = []
 enabled = true
 host = "127.0.0.1"
 port = 27080
+# 访问 token，为空时每次启动自动生成
+# token = "your_token_here"

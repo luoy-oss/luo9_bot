@@ -60,6 +60,9 @@ pub struct WebuiConfig {
     pub host: String,
     #[serde(default = "default_webui_port")]
     pub port: u16,
+    /// WebUI 访问 token，为空时每次启动随机生成
+    #[serde(default)]
+    pub token: String,
 }
 
 impl Default for WebuiConfig {
@@ -68,6 +71,7 @@ impl Default for WebuiConfig {
             enabled: default_webui_enabled(),
             host: default_webui_host(),
             port: default_webui_port(),
+            token: String::new(),
         }
     }
 }

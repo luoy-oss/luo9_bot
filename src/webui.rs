@@ -1,8 +1,9 @@
 use axum::{
     Router,
-    extract::{Multipart, Path, Query, State},
-    http::StatusCode,
-    response::{Html, IntoResponse, Json},
+    extract::{Multipart, Path, Query, Request, State},
+    http::{StatusCode, header},
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Json, Response},
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,7 @@ struct RegistryVersion {
 pub struct WebuiState {
     pub plugin_dir: String,
     pub start_time: std::time::Instant,
+    pub token: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -99,16 +101,42 @@ struct AvailablePlugin {
 
 // ========== 启动服务 ==========
 
-pub async fn start(host: &str, port: u16, plugin_dir: String) {
+/// 生成随机 token（16 位十六进制）
+fn generate_token() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    // 简单的伪随机：时间戳的低位 + 进程 ID
+    let pid = std::process::id();
+    format!("{:016x}", timestamp.wrapping_mul(pid as u128))
+}
+
+pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String) {
+    // token 生成逻辑：配置为空时随机生成
+    let token = if config_token.is_empty() {
+        let generated = generate_token();
+        info!("WebUI token 未配置，已自动生成: {}", generated);
+        generated
+    } else {
+        info!("WebUI 使用配置的 token");
+        config_token
+    };
+
     let state = Arc::new(WebuiState {
         plugin_dir,
         start_time: std::time::Instant::now(),
+        token: token.clone(),
     });
 
-    let app = Router::new()
+    // 静态资源无需鉴权，API 需要鉴权
+    let static_routes = Router::new()
         .route("/", get(index_page))
         .route("/style.css", get(style_css))
-        .route("/app.js", get(app_js))
+        .route("/app.js", get(app_js));
+
+    let api_routes = Router::new()
         .route("/api/status", get(api_status))
         .route("/api/plugins", get(api_plugins))
         .route("/api/plugins/upload", post(api_plugin_upload))
@@ -118,15 +146,95 @@ pub async fn start(host: &str, port: u16, plugin_dir: String) {
         .route("/api/plugins/install/{name}", post(api_plugin_install))
         .route("/api/registry", get(api_registry))
         .route("/api/logs", get(api_logs))
+        .route("/api/config/path", get(api_config_path))
+        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+
+    let app = Router::new()
+        .merge(static_routes)
+        .merge(api_routes)
         .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr = format!("{}:{}", host, port);
-    info!("WebUI 启动于 http://{}", addr);
+    info!("WebUI 启动于 http://{}?token={}", addr, token);
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
+
+// ========== 鉴权中间件 ==========
+
+/// 从 query 字符串中提取指定参数值
+fn extract_query_param(query: &str, key: &str) -> Option<String> {
+    for pair in query.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == key {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// API 鉴权中间件：检查 query 参数或 cookie 中的 token
+async fn auth_middleware(
+    State(state): State<Arc<WebuiState>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let uri = request.uri().clone();
+    let headers = request.headers().clone();
+
+    // 1. 从 query 参数获取 token
+    let query_token = uri
+        .query()
+        .and_then(|q| extract_query_param(q, "token"));
+
+    // 2. 从 cookie 获取 token
+    let cookie_token = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';').find_map(|c| {
+                let c = c.trim();
+                if c.starts_with("luo9_token=") {
+                    Some(c.trim_start_matches("luo9_token=").to_string())
+                } else {
+                    None
+                }
+            })
+        });
+
+    // 验证 token
+    let valid = query_token
+        .as_deref()
+        .or(cookie_token.as_deref())
+        .map(|t| t == state.token)
+        .unwrap_or(false);
+
+    if !valid {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"ok": false, "message": "未授权访问，请提供有效的 token"})),
+        )
+            .into_response();
+    }
+
+    let mut response = next.run(request).await;
+
+    // 如果是 query 参数验证通过，设置 cookie
+    if query_token.is_some() {
+        let cookie_value = format!("luo9_token={}; Path=/; HttpOnly; SameSite=Strict", state.token);
+        response.headers_mut().insert(
+            header::SET_COOKIE,
+            cookie_value.parse().unwrap(),
+        );
+    }
+
+    response
+}
+
+// ========== 静态资源 ==========
 
 async fn index_page() -> impl IntoResponse {
     Html(include_str!("webui/index.html"))
@@ -162,6 +270,14 @@ async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
 async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
     let plugins = scan_plugins(&state.plugin_dir);
     Json(plugins)
+}
+
+/// 返回当前使用的配置文件路径
+async fn api_config_path() -> impl IntoResponse {
+    let path = crate::config::LNConfig::config_path();
+    Json(serde_json::json!({
+        "path": path.to_string_lossy(),
+    }))
 }
 
 // ========== 注册表 API ==========

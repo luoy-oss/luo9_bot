@@ -11,9 +11,59 @@
   let storeData = [];
   let activeTag = 'all';
   let confirmResolve = null;
+  let authToken = null;
+
+  // ── Token 管理 ─────────────────────────
+  function initToken() {
+    // 1. 从 URL 参数获取 token
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+
+    if (urlToken) {
+      // URL 中有 token，保存到 localStorage
+      authToken = urlToken;
+      localStorage.setItem('luo9_token', urlToken);
+      // 清除 URL 中的 token 参数（避免泄露）
+      const url = new URL(window.location);
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url);
+      return true;
+    }
+
+    // 2. 从 localStorage 获取 token
+    const savedToken = localStorage.getItem('luo9_token');
+    if (savedToken) {
+      authToken = savedToken;
+      return true;
+    }
+
+    // 3. 没有 token
+    return false;
+  }
 
   // ── 初始化 ─────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
+    if (!initToken()) {
+      // 没有 token，显示错误提示
+      document.body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;
+                    background:#fef7ff;font-family:system-ui;">
+          <div style="text-align:center;padding:2rem;background:white;border-radius:16px;
+                      box-shadow:0 4px 20px rgba(0,0,0,0.08);max-width:400px;">
+            <div style="font-size:3rem;margin-bottom:1rem;">🔒</div>
+            <h2 style="margin:0 0 0.5rem;color:#6b21a8;">需要访问令牌</h2>
+            <p style="color:#666;margin:0 0 1.5rem;">
+              请在 URL 中添加 <code style="background:#f3e8ff;padding:2px 6px;border-radius:4px;">?token=xxxx</code> 参数访问
+            </p>
+            <p style="color:#999;font-size:0.85rem;">
+              首次启动时请查看控制台输出的 token 地址
+            </p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     initTabs();
     initUpload();
     initLogs();
@@ -22,6 +72,12 @@
     // 定时刷新状态
     setInterval(refreshStatus, 10000);
   });
+
+  // ── API 请求辅助 ─────────────────────
+  function apiUrl(path) {
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}token=${encodeURIComponent(authToken)}`;
+  }
 
   // ── Tab 切换 ───────────────────────────
   function initTabs() {
@@ -52,7 +108,7 @@
   // ── 状态 API ───────────────────────────
   async function refreshStatus() {
     try {
-      const resp = await fetch('/api/status');
+      const resp = await fetch(apiUrl('/api/status'));
       const data = await resp.json();
       document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_secs);
       document.getElementById('stat-plugins').textContent = data.plugin_count;
@@ -73,7 +129,7 @@
   // ── 已安装插件 ─────────────────────────
   async function refreshInstalled() {
     try {
-      const resp = await fetch('/api/plugins');
+      const resp = await fetch(apiUrl('/api/plugins'));
       const plugins = await resp.json();
       const list = document.getElementById('installed-list');
       const empty = document.getElementById('installed-empty');
@@ -116,7 +172,7 @@
     empty.style.display = 'none';
 
     try {
-      const resp = await fetch('/api/registry');
+      const resp = await fetch(apiUrl('/api/registry'));
       if (!resp.ok) {
         throw new Error('HTTP ' + resp.status);
       }
@@ -209,7 +265,7 @@
 
     const endpoint = enabled ? 'disable' : 'enable';
     try {
-      const resp = await fetch(`/api/plugins/${encodeURIComponent(name)}/${endpoint}`, { method: 'POST' });
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}/${endpoint}`), { method: 'POST' });
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) refreshInstalled();
@@ -223,7 +279,7 @@
     if (!ok) return;
 
     try {
-      const resp = await fetch(`/api/plugins/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}`), { method: 'DELETE' });
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) {
@@ -240,7 +296,7 @@
     if (!ok) return;
 
     try {
-      const resp = await fetch(`/api/plugins/install/${encodeURIComponent(name)}`, { method: 'POST' });
+      const resp = await fetch(apiUrl(`/api/plugins/install/${encodeURIComponent(name)}`), { method: 'POST' });
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) {
@@ -297,7 +353,7 @@
     }
 
     try {
-      const resp = await fetch('/api/plugins/upload', { method: 'POST', body: formData });
+      const resp = await fetch(apiUrl('/api/plugins/upload'), { method: 'POST', body: formData });
       const data = await resp.json();
       showToast(data.message, data.ok);
       if (data.ok) {
@@ -322,7 +378,7 @@
 
   async function refreshLogs() {
     try {
-      const resp = await fetch(`/api/logs?after=${logOffset}`);
+      const resp = await fetch(apiUrl(`/api/logs?after=${logOffset}`));
       const data = await resp.json();
 
       if (data.lines.length === 0) return;
