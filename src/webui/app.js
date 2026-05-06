@@ -147,7 +147,10 @@
       list.innerHTML = plugins.map((p, i) => `
         <div class="plugin-item" style="animation-delay:${i * 0.05}s">
           <div class="plugin-info">
-            <div class="plugin-name">${esc(p.name)}</div>
+            <div class="plugin-name">
+              ${esc(p.name)}
+              ${p.version ? `<span class="plugin-version">v${esc(p.version)}</span>` : ''}
+            </div>
             <div class="plugin-file">${esc(p.file)}</div>
             <div class="plugin-controls">
               <label class="control-label" title="优先级越高越先收到消息">

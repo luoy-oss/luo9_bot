@@ -250,6 +250,17 @@ body {
 .badge-sdk { background: rgba(255,213,128,0.2); color: #b8860b; cursor: pointer; }
 .badge-tag { background: rgba(248,200,220,0.3); color: #c06080; font-size: 0.68em; }
 
+.plugin-version {
+  display: inline-block;
+  background: rgba(184, 169, 232, 0.15);
+  color: var(--accent-dark);
+  font-size: 0.75em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  font-weight: 500;
+}
+
 /* ── Buttons ───────────────────────────── */
 .btn {
   padding: 7px 16px;

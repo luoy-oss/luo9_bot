@@ -241,10 +241,11 @@ pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo,
 
         let has_main = lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok();
 
-        let plugin_name = path.file_stem()
+        // 提取插件名称（去掉 lib 前缀和 .so/.dll 后缀）
+        let file_name = path.file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
+            .unwrap_or("unknown");
+        let plugin_name = extract_display_name(file_name);
 
         let info = PluginInfo {
             id: default_id,
@@ -284,4 +285,21 @@ pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo,
 
         Ok((info, handle))
     }
+}
+
+/// 从文件名提取显示名称（去掉 lib 前缀和 .so/.dll 后缀）
+fn extract_display_name(file_name: &str) -> String {
+    // 去掉后缀
+    let name = if file_name.ends_with(".so") {
+        file_name.trim_end_matches(".so")
+    } else if file_name.ends_with(".dll") {
+        file_name.trim_end_matches(".dll")
+    } else {
+        file_name
+    };
+
+    // 去掉 lib 前缀（Linux 惯例）
+    let name = name.strip_prefix("lib").unwrap_or(name);
+
+    name.to_string()
 }
