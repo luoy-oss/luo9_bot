@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, RwLock};
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
@@ -39,7 +39,13 @@ const GITHUB_RELEASE_MIRRORS: &[&str] = &[
 ];
 
 /// HTTP 请求超时时间
-const HTTP_TIMEOUT_SECS: u64 = 15;
+const HTTP_TIMEOUT_SECS: u64 = 10;
+
+/// 镜像健康检查测试 URL（用于检测连通性）
+const MIRROR_TEST_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
+
+/// 镜像健康检查间隔（秒）
+const MIRROR_CHECK_INTERVAL_SECS: u64 = 300; // 5 分钟
 
 // ========== 注册表数据结构 ==========
 
@@ -78,11 +84,32 @@ pub struct DownloadProgress {
     pub progress: Option<f32>, // 0.0 - 1.0，None 表示不确定
 }
 
+/// 镜像健康状态
+#[derive(Debug, Clone, Serialize)]
+struct MirrorStatus {
+    url: String,
+    latency_ms: u64,
+    available: bool,
+}
+
+/// 镜像健康检查缓存
+#[derive(Debug, Clone)]
+pub struct MirrorCache {
+    /// 可用的 raw 镜像（按延迟排序）
+    raw_mirrors: Vec<MirrorStatus>,
+    /// 可用的 release 镜像（按延迟排序）
+    release_mirrors: Vec<MirrorStatus>,
+    /// 上次检查时间
+    last_check: std::time::Instant,
+}
+
 pub struct WebuiState {
     pub plugin_dir: String,
     pub start_time: std::time::Instant,
     pub token: String,
     pub progress_tx: broadcast::Sender<DownloadProgress>,
+    /// 镜像健康检查缓存
+    pub mirror_cache: Arc<RwLock<Option<MirrorCache>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -221,11 +248,31 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     // 创建下载进度广播通道
     let (progress_tx, _) = broadcast::channel::<DownloadProgress>(100);
 
+    // 镜像健康检查缓存
+    let mirror_cache = Arc::new(RwLock::new(None));
+
     let state = Arc::new(WebuiState {
         plugin_dir,
         start_time: std::time::Instant::now(),
         token: token.clone(),
         progress_tx,
+        mirror_cache: mirror_cache.clone(),
+    });
+
+    // 启动镜像健康检查任务（后台预热）
+    let cache_for_check = mirror_cache.clone();
+    tokio::spawn(async move {
+        // 首次立即检查
+        check_mirrors_health(&cache_for_check).await;
+
+        // 定时刷新
+        let mut interval = tokio::time::interval(
+            std::time::Duration::from_secs(MIRROR_CHECK_INTERVAL_SECS)
+        );
+        loop {
+            interval.tick().await;
+            check_mirrors_health(&cache_for_check).await;
+        }
     });
 
     // 静态资源无需鉴权，API 需要鉴权
@@ -251,6 +298,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/config", get(api_config_get).put(api_config_put))
         .route("/api/config/raw", get(api_config_raw_get).put(api_config_raw_put))
         .route("/api/download-progress", get(api_download_progress))
+        .route("/api/mirrors", get(api_mirrors))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
@@ -358,6 +406,138 @@ async fn app_js() -> impl IntoResponse {
     )
 }
 
+// ========== 镜像健康检查 ==========
+
+/// 并行检查所有镜像的连通性，按延迟排序
+async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
+    info!("开始镜像健康检查...");
+
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("创建 HTTP 客户端失败: {e}");
+            return;
+        }
+    };
+
+    // 并行检查 raw 镜像
+    let raw_futures: Vec<_> = GITHUB_RAW_MIRRORS.iter().map(|mirror| {
+        let url = format!("{}{}", mirror, MIRROR_TEST_URL);
+        let client = client.clone();
+        async move {
+            let start = std::time::Instant::now();
+            let result = client.get(&url).header("User-Agent", "luo9-bot").send().await;
+            let latency = start.elapsed().as_millis() as u64;
+
+            MirrorStatus {
+                url: mirror.to_string(),
+                latency_ms: latency,
+                available: result.map(|r| r.status().is_success()).unwrap_or(false),
+            }
+        }
+    }).collect();
+
+    // 并行检查 release 镜像（使用相同测试 URL）
+    let release_futures: Vec<_> = GITHUB_RELEASE_MIRRORS.iter().map(|mirror| {
+        let url = format!("{}{}", mirror, MIRROR_TEST_URL);
+        let client = client.clone();
+        async move {
+            let start = std::time::Instant::now();
+            let result = client.get(&url).header("User-Agent", "luo9-bot").send().await;
+            let latency = start.elapsed().as_millis() as u64;
+
+            MirrorStatus {
+                url: mirror.to_string(),
+                latency_ms: latency,
+                available: result.map(|r| r.status().is_success()).unwrap_or(false),
+            }
+        }
+    }).collect();
+
+    // 等待所有检查完成
+    let (raw_results, release_results) = tokio::join!(
+        futures_util::future::join_all(raw_futures),
+        futures_util::future::join_all(release_futures),
+    );
+
+    // 过滤可用镜像并按延迟排序
+    let mut raw_mirrors: Vec<_> = raw_results.into_iter().filter(|m| m.available).collect();
+    raw_mirrors.sort_by_key(|m| m.latency_ms);
+
+    let mut release_mirrors: Vec<_> = release_results.into_iter().filter(|m| m.available).collect();
+    release_mirrors.sort_by_key(|m| m.latency_ms);
+
+    let raw_count = raw_mirrors.len();
+    let release_count = release_mirrors.len();
+
+    // 更新缓存
+    let mut cache_write = cache.write().await;
+    *cache_write = Some(MirrorCache {
+        raw_mirrors,
+        release_mirrors,
+        last_check: std::time::Instant::now(),
+    });
+
+    info!("镜像健康检查完成: raw {}/{} 可用, release {}/{} 可用",
+        raw_count, GITHUB_RAW_MIRRORS.len(),
+        release_count, GITHUB_RELEASE_MIRRORS.len()
+    );
+}
+
+/// 获取可用镜像列表（优先使用缓存）
+async fn get_available_mirrors(
+    cache: &Arc<RwLock<Option<MirrorCache>>>,
+    mirror_type: &str, // "raw" 或 "release"
+) -> Vec<String> {
+    let cache_read = cache.read().await;
+
+    if let Some(ref cache_data) = *cache_read {
+        // 检查缓存是否过期（5 分钟）
+        if cache_data.last_check.elapsed().as_secs() < MIRROR_CHECK_INTERVAL_SECS {
+            let mirrors = match mirror_type {
+                "raw" => &cache_data.raw_mirrors,
+                "release" => &cache_data.release_mirrors,
+                _ => return Vec::new(),
+            };
+
+            // 返回可用镜像 URL
+            return mirrors.iter().map(|m| m.url.clone()).collect();
+        }
+    }
+
+    // 缓存未命中或已过期，返回默认镜像列表
+    match mirror_type {
+        "raw" => GITHUB_RAW_MIRRORS.iter().map(|s| s.to_string()).collect(),
+        "release" => GITHUB_RELEASE_MIRRORS.iter().map(|s| s.to_string()).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// 返回镜像健康状态
+async fn api_mirrors(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
+    let cache_read = state.mirror_cache.read().await;
+
+    if let Some(ref cache_data) = *cache_read {
+        Json(serde_json::json!({
+            "ok": true,
+            "raw_mirrors": cache_data.raw_mirrors,
+            "release_mirrors": cache_data.release_mirrors,
+            "last_check": cache_data.last_check.elapsed().as_secs(),
+        }))
+    } else {
+        Json(serde_json::json!({
+            "ok": true,
+            "raw_mirrors": [],
+            "release_mirrors": [],
+            "last_check": null,
+            "message": "镜像健康检查尚未完成",
+        }))
+    }
+}
+
 // ========== 状态 API ==========
 
 async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
@@ -398,7 +578,10 @@ async fn api_config_path() -> impl IntoResponse {
 // ========== 注册表 API ==========
 
 async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
-    let registry = match fetch_registry().await {
+    // 获取可用镜像列表（优先使用缓存）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, "raw").await;
+
+    let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
         Err(e) => {
             return (
@@ -451,7 +634,10 @@ async fn api_plugin_install(
     Path(name): Path<String>,
     Query(q): Query<InstallQuery>,
 ) -> impl IntoResponse {
-    let registry = match fetch_registry().await {
+    // 获取可用镜像列表（优先使用缓存）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, "raw").await;
+
+    let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
         Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("获取注册表失败: {e}")),
     };
@@ -486,12 +672,15 @@ async fn api_plugin_install(
         }
     };
 
-    // 构建下载 URL（含镜像 fallback）
+    // 构建下载 URL（使用缓存的可用镜像）
     let primary_url = format!(
         "https://github.com/{}/releases/download/{}/{}",
         plugin.repo, version_entry.tag, asset_name
     );
-    let download_urls = build_mirrored_urls(&primary_url, GITHUB_RELEASE_MIRRORS);
+
+    // 获取可用镜像列表（优先使用缓存）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, "release").await;
+    let download_urls = build_mirrored_urls(&primary_url, &available_mirrors.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
     info!("正在下载插件: {} v{}", name, version_entry.version);
 
@@ -1128,8 +1317,9 @@ async fn download_with_fallback(
     Err(last_err)
 }
 
-async fn fetch_registry() -> Result<Registry, String> {
-    let urls = build_mirrored_urls(REGISTRY_URL, GITHUB_RAW_MIRRORS);
+async fn fetch_registry_with_mirrors(mirrors: &[String]) -> Result<Registry, String> {
+    let mirror_refs: Vec<&str> = mirrors.iter().map(|s| s.as_str()).collect();
+    let urls = build_mirrored_urls(REGISTRY_URL, &mirror_refs);
     let body = fetch_with_fallback(&urls).await?;
     serde_json::from_str(&body).map_err(|e| format!("解析注册表失败: {e}"))
 }
