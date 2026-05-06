@@ -13,7 +13,12 @@ token="token"
 level = "info"
 
 [plugins]
-enabled = false
-plugin_dir = "H:/github/luo9_bot/rust/plugins/"
+enabled = true
+plugin_dir = "plugins"
 auto_load = true
 plugins = []
+
+[webui]
+enabled = true
+host = "127.0.0.1"
+port = 27080

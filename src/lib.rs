@@ -14,6 +14,7 @@ pub mod notice;
 
 pub mod plugin;
 pub mod sub_type;
+pub mod webui;
 
 use config::LNConfig;
 use error::Result;

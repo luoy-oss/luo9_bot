@@ -1,0 +1,90 @@
+# Luo9 Bot 构建 workflow
+# 当推送 tag（v*）时自动构建 Linux/Windows 二进制并创建 Release
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 构建
+        run: cargo build --release --bin luo9_bot
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: target/release/luo9_bot
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 构建
+        run: cargo build --release --bin luo9_bot
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: target/release/luo9_bot.exe
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 准备发布文件
+        run: |
+          mkdir -p release
+          cp artifacts/linux-x86_64/luo9_bot release/luo9_bot
+          cp artifacts/windows-x86_64/luo9_bot.exe release/luo9_bot.exe
+          chmod +x release/luo9_bot
+
+      - name: 读取版本信息
+        id: meta
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+          DESCRIPTION=$(grep '^description' Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Luo9 Bot v${{ steps.meta.outputs.version }}"
+          body: |
+            ## ${{ steps.meta.outputs.description }}
+
+            ### 下载
+            | 平台 | 文件 |
+            |------|------|
+            | Linux x86_64 | `luo9_bot` |
+            | Windows x86_64 | `luo9_bot.exe` |
+          files: |
+            release/luo9_bot
+            release/luo9_bot.exe
