@@ -3,14 +3,19 @@ use axum::{
     extract::{Multipart, Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Json, Response},
+    response::{
+        Html, IntoResponse, Json, Response,
+        sse::{Event, Sse},
+    },
     routing::{delete, get, post, put},
 };
+use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
@@ -64,10 +69,20 @@ struct RegistryVersion {
 
 // ========== WebUI 数据结构 ==========
 
+/// 下载进度事件
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadProgress {
+    pub plugin_name: String,
+    pub status: String,      // "downloading", "success", "error"
+    pub message: String,
+    pub progress: Option<f32>, // 0.0 - 1.0，None 表示不确定
+}
+
 pub struct WebuiState {
     pub plugin_dir: String,
     pub start_time: std::time::Instant,
     pub token: String,
+    pub progress_tx: broadcast::Sender<DownloadProgress>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -203,10 +218,14 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         config_token
     };
 
+    // 创建下载进度广播通道
+    let (progress_tx, _) = broadcast::channel::<DownloadProgress>(100);
+
     let state = Arc::new(WebuiState {
         plugin_dir,
         start_time: std::time::Instant::now(),
         token: token.clone(),
+        progress_tx,
     });
 
     // 静态资源无需鉴权，API 需要鉴权
@@ -231,6 +250,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/config/path", get(api_config_path))
         .route("/api/config", get(api_config_get).put(api_config_put))
         .route("/api/config/raw", get(api_config_raw_get).put(api_config_raw_put))
+        .route("/api/download-progress", get(api_download_progress))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
@@ -475,11 +495,35 @@ async fn api_plugin_install(
 
     info!("正在下载插件: {} v{}", name, version_entry.version);
 
+    // 发送下载开始进度
+    let _ = state.progress_tx.send(DownloadProgress {
+        plugin_name: name.clone(),
+        status: "downloading".to_string(),
+        message: format!("正在下载 {} v{}...", name, version_entry.version),
+        progress: Some(0.0),
+    });
+
     // 带镜像 fallback 下载文件
-    let bytes = match download_with_fallback(&download_urls).await {
+    let bytes = match download_with_fallback(&download_urls, &state.progress_tx, &name).await {
         Ok(b) => b,
-        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("下载失败: {e}")),
+        Err(e) => {
+            let _ = state.progress_tx.send(DownloadProgress {
+                plugin_name: name.clone(),
+                status: "error".to_string(),
+                message: format!("下载失败: {e}"),
+                progress: None,
+            });
+            return json_err(StatusCode::BAD_GATEWAY, &format!("下载失败: {e}"));
+        }
     };
+
+    // 发送下载完成进度
+    let _ = state.progress_tx.send(DownloadProgress {
+        plugin_name: name.clone(),
+        status: "downloading".to_string(),
+        message: format!("正在保存文件..."),
+        progress: Some(0.9),
+    });
 
     // 保存到插件目录
     let dir = PathBuf::from(&state.plugin_dir);
@@ -502,6 +546,12 @@ async fn api_plugin_install(
     match crate::plugin::enable_plugin(&name, &target, &config_entries).await {
         Ok(msg) => {
             info!("插件 {} 已自动加载: {}", name, msg);
+            let _ = state.progress_tx.send(DownloadProgress {
+                plugin_name: name.clone(),
+                status: "success".to_string(),
+                message: format!("插件 {} v{} 安装成功并已加载", name, version_entry.version),
+                progress: Some(1.0),
+            });
             json_ok(&format!(
                 "插件 {} v{} 安装成功并已加载",
                 name, version_entry.version
@@ -509,6 +559,12 @@ async fn api_plugin_install(
         }
         Err(e) => {
             warn!("插件 {} 安装成功但自动加载失败: {}", name, e);
+            let _ = state.progress_tx.send(DownloadProgress {
+                plugin_name: name.clone(),
+                status: "success".to_string(),
+                message: format!("插件 {} v{} 安装成功，但自动加载失败: {}", name, version_entry.version, e),
+                progress: Some(1.0),
+            });
             json_ok(&format!(
                 "插件 {} v{} 安装成功，但自动加载失败: {}",
                 name, version_entry.version, e
@@ -892,6 +948,34 @@ async fn api_config_raw_put(Json(req): Json<RawConfigUpdate>) -> impl IntoRespon
     json_ok("配置已保存，重启后生效")
 }
 
+// ========== 下载进度 SSE ==========
+
+/// 下载进度 SSE 端点
+async fn api_download_progress(
+    State(state): State<Arc<WebuiState>>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let mut rx = state.progress_tx.subscribe();
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(progress) => {
+                    let data = serde_json::to_string(&progress).unwrap_or_default();
+                    yield Ok(Event::default().data(data));
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("ping"),
+    )
+}
+
 // ========== 辅助函数 ==========
 
 fn json_ok(msg: &str) -> (StatusCode, Json<MsgResponse>) {
@@ -914,16 +998,17 @@ fn json_err(status: StatusCode, msg: &str) -> (StatusCode, Json<MsgResponse>) {
     )
 }
 
-/// 构建镜像 URL 列表：原始 URL + 各镜像 URL
+/// 构建镜像 URL 列表：各镜像 URL + 原始 URL（镜像优先）
 ///
-/// 对于 `https://raw.githubusercontent.com/...` 形式的 URL，
-/// 镜像 URL 为 `https://ghfast.top/https://raw.githubusercontent.com/...`
+/// 对于 `https://github.com/...` 形式的 URL，
+/// 镜像 URL 为 `https://ghfast.top/https://github.com/...`
 fn build_mirrored_urls(original: &str, mirrors: &[&str]) -> Vec<String> {
     let mut urls = Vec::with_capacity(1 + mirrors.len());
-    urls.push(original.to_string());
+    // 镜像优先，避免直连 GitHub 超时
     for mirror in mirrors {
         urls.push(format!("{}{}", mirror, original));
     }
+    urls.push(original.to_string());
     urls
 }
 
@@ -967,14 +1052,32 @@ async fn fetch_with_fallback(urls: &[String]) -> Result<String, String> {
 /// 带镜像 fallback 的文件下载
 ///
 /// 依次尝试每个 URL，返回第一个成功的响应字节。
-async fn download_with_fallback(urls: &[String]) -> Result<Vec<u8>, String> {
+/// 支持进度推送。
+async fn download_with_fallback(
+    urls: &[String],
+    progress_tx: &broadcast::Sender<DownloadProgress>,
+    plugin_name: &str,
+) -> Result<Vec<u8>, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 4)) // 下载给更长时间
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 2)) // 缩短超时，快速 fallback
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
 
+    let total_urls = urls.len();
     let mut last_err = String::new();
-    for url in urls {
+
+    for (i, url) in urls.iter().enumerate() {
+        // 发送尝试进度
+        let progress = (i as f32) / (total_urls as f32) * 0.8; // 0% - 80%
+        let is_mirror = url.contains("ghfast.top") || url.contains("ghproxy.cn") || url.contains("gitmirror.com") || url.contains("mirror.ghproxy.com");
+        let source = if is_mirror { "镜像" } else { "直连" };
+        let _ = progress_tx.send(DownloadProgress {
+            plugin_name: plugin_name.to_string(),
+            status: "downloading".to_string(),
+            message: format!("正在尝试{source}: {}", if is_mirror { url.split('/').nth(2).unwrap_or("...") } else { "github.com" }),
+            progress: Some(progress),
+        });
+
         match client
             .get(url)
             .header("User-Agent", "luo9-bot")
@@ -982,9 +1085,34 @@ async fn download_with_fallback(urls: &[String]) -> Result<Vec<u8>, String> {
             .await
         {
             Ok(resp) if resp.status().is_success() => {
+                // 获取 Content-Length 用于进度显示
+                let total_size = resp.content_length().unwrap_or(0);
+
+                // 流式下载，支持进度更新
                 match resp.bytes().await {
-                    Ok(bytes) => return Ok(bytes.to_vec()),
-                    Err(e) => last_err = format!("读取响应失败 ({url}): {e}"),
+                    Ok(chunk) => {
+                        let bytes = chunk.to_vec();
+                        let downloaded = bytes.len() as u64;
+
+                        // 发送下载进度
+                        let progress = if total_size > 0 {
+                            0.8 + (downloaded as f32 / total_size as f32) * 0.1 // 80% - 90%
+                        } else {
+                            0.85
+                        };
+                        let _ = progress_tx.send(DownloadProgress {
+                            plugin_name: plugin_name.to_string(),
+                            status: "downloading".to_string(),
+                            message: format!("已下载 {:.1} KB", downloaded as f64 / 1024.0),
+                            progress: Some(progress),
+                        });
+
+                        return Ok(bytes);
+                    }
+                    Err(e) => {
+                        last_err = format!("读取响应失败 ({url}): {e}");
+                        warn!("镜像下载失败: {}", last_err);
+                    }
                 }
             }
             Ok(resp) => {
