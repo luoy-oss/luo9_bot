@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    extract::{Multipart, Path, Query, Request, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{
@@ -317,6 +317,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .merge(static_routes)
         .merge(api_routes)
         .layer(CorsLayer::permissive())
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100MB 上传限制
         .with_state(state);
 
     // 端口被占用时自动自增，最多尝试 20 次
@@ -1303,14 +1304,14 @@ async fn fetch_with_fallback(urls: &[String]) -> Result<String, String> {
 /// 带镜像 fallback 的文件下载
 ///
 /// 依次尝试每个 URL，返回第一个成功的响应字节。
-/// 支持进度推送。
+/// 支持流式进度推送。
 async fn download_with_fallback(
     urls: &[String],
     progress_tx: &broadcast::Sender<DownloadProgress>,
     plugin_name: &str,
 ) -> Result<Vec<u8>, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 2)) // 缩短超时，快速 fallback
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 2))
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
 
@@ -1319,13 +1320,14 @@ async fn download_with_fallback(
 
     for (i, url) in urls.iter().enumerate() {
         // 发送尝试进度
-        let progress = (i as f32) / (total_urls as f32) * 0.8; // 0% - 80%
+        let progress = (i as f32) / (total_urls as f32) * 0.8;
         let is_mirror = url.contains("ghfast.top") || url.contains("ghproxy.cn") || url.contains("gitmirror.com") || url.contains("mirror.ghproxy.com");
         let source = if is_mirror { "镜像" } else { "直连" };
+        let host = if is_mirror { url.split('/').nth(2).unwrap_or("...") } else { "github.com" };
         let _ = progress_tx.send(DownloadProgress {
             plugin_name: plugin_name.to_string(),
             status: "downloading".to_string(),
-            message: format!("正在尝试{source}: {}", if is_mirror { url.split('/').nth(2).unwrap_or("...") } else { "github.com" }),
+            message: format!("正在尝试{source}: {host}"),
             progress: Some(progress),
         });
 
@@ -1336,34 +1338,53 @@ async fn download_with_fallback(
             .await
         {
             Ok(resp) if resp.status().is_success() => {
-                // 获取 Content-Length 用于进度显示
                 let total_size = resp.content_length().unwrap_or(0);
+                let mut bytes = Vec::new();
+                let mut downloaded: u64 = 0;
+                let mut last_report = std::time::Instant::now();
 
-                // 流式下载，支持进度更新
-                match resp.bytes().await {
-                    Ok(chunk) => {
-                        let bytes = chunk.to_vec();
-                        let downloaded = bytes.len() as u64;
+                // 流式读取
+                use futures_util::StreamExt;
+                let mut stream = resp.bytes_stream();
+                while let Some(chunk) = stream.next().await {
+                    match chunk {
+                        Ok(data) => {
+                            bytes.extend_from_slice(&data);
+                            downloaded += data.len() as u64;
 
-                        // 发送下载进度
-                        let progress = if total_size > 0 {
-                            0.8 + (downloaded as f32 / total_size as f32) * 0.1 // 80% - 90%
-                        } else {
-                            0.85
-                        };
-                        let _ = progress_tx.send(DownloadProgress {
-                            plugin_name: plugin_name.to_string(),
-                            status: "downloading".to_string(),
-                            message: format!("已下载 {:.1} KB", downloaded as f64 / 1024.0),
-                            progress: Some(progress),
-                        });
-
-                        return Ok(bytes);
+                            // 每 200ms 推送一次进度
+                            if last_report.elapsed().as_millis() > 200 || downloaded == total_size {
+                                let progress = if total_size > 0 {
+                                    0.8 + (downloaded as f32 / total_size as f32) * 0.15
+                                } else {
+                                    0.85
+                                };
+                                let _ = progress_tx.send(DownloadProgress {
+                                    plugin_name: plugin_name.to_string(),
+                                    status: "downloading".to_string(),
+                                    message: format!("已下载 {:.1} / {:.1} KB", downloaded as f64 / 1024.0, total_size as f64 / 1024.0),
+                                    progress: Some(progress),
+                                });
+                                last_report = std::time::Instant::now();
+                            }
+                        }
+                        Err(e) => {
+                            last_err = format!("下载中断 ({url}): {e}");
+                            warn!("镜像下载失败: {}", last_err);
+                            break;
+                        }
                     }
-                    Err(e) => {
-                        last_err = format!("读取响应失败 ({url}): {e}");
-                        warn!("镜像下载失败: {}", last_err);
-                    }
+                }
+
+                if bytes.len() as u64 == downloaded && downloaded > 0 {
+                    // 下载成功
+                    let _ = progress_tx.send(DownloadProgress {
+                        plugin_name: plugin_name.to_string(),
+                        status: "downloading".to_string(),
+                        message: format!("下载完成: {:.1} KB", downloaded as f64 / 1024.0),
+                        progress: Some(0.95),
+                    });
+                    return Ok(bytes);
                 }
             }
             Ok(resp) => {
