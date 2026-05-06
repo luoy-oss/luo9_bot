@@ -992,23 +992,50 @@ async fn api_plugin_delete(
         return json_err(StatusCode::NOT_FOUND, &format!("未找到插件 {name}"));
     }
 
-    let mut deleted = 0;
-    if let Some(path) = enabled {
-        if fs::remove_file(&path).is_ok() {
-            info!("已删除插件文件: {}", path.display());
-            deleted += 1;
-        }
-    }
-    if let Some(path) = disabled {
-        if fs::remove_file(&path).is_ok() {
-            info!("已删除禁用插件文件: {}", path.display());
-            deleted += 1;
+    // 如果插件是启用状态，先运行时卸载（取消订阅、等待线程退出、释放 DLL 锁）
+    if enabled.is_some() {
+        let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+        match manager.disable_plugin(&name).await {
+            Ok(msg) => info!("{}", msg),
+            Err(e) => {
+                if !e.contains("已经是禁用状态") {
+                    warn!("插件 {} 运行时卸载失败: {}", name, e);
+                    // 继续尝试删除文件
+                }
+            }
         }
     }
 
-    json_ok(&format!(
-        "已删除插件 {name} 的 {deleted} 个文件，重启后生效"
-    ))
+    // 删除文件
+    let mut deleted = 0;
+    if let Some(path) = enabled {
+        match fs::remove_file(&path) {
+            Ok(_) => {
+                info!("已删除插件文件: {}", path.display());
+                deleted += 1;
+            }
+            Err(e) => {
+                warn!("删除插件文件失败 {}: {}", path.display(), e);
+            }
+        }
+    }
+    if let Some(path) = disabled {
+        match fs::remove_file(&path) {
+            Ok(_) => {
+                info!("已删除禁用插件文件: {}", path.display());
+                deleted += 1;
+            }
+            Err(e) => {
+                warn!("删除禁用插件文件失败 {}: {}", path.display(), e);
+            }
+        }
+    }
+
+    if deleted == 0 {
+        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("删除插件 {name} 失败"));
+    }
+
+    json_ok(&format!("插件 {name} 已卸载并删除 {deleted} 个文件"))
 }
 
 // ========== 日志 API ==========
