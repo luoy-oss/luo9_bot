@@ -118,6 +118,8 @@ struct PluginInfo {
     file: String,
     enabled: bool,
     #[serde(default)]
+    version: String,
+    #[serde(default)]
     priority: i32,
     #[serde(default)]
     block_enabled: bool,
@@ -558,6 +560,7 @@ async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
     let manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
     for plugin in &mut plugins {
         if let Some(info) = manager.get_plugin_info(&plugin.name) {
+            plugin.version = info.version.clone();
             plugin.priority = info.priority;
             plugin.block_enabled = info.block_enabled;
             plugin.active = info.active;
@@ -1425,6 +1428,7 @@ fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
                     name: name.to_string(),
                     file: file_name.to_string(),
                     enabled: !file_name.ends_with(".disabled"),
+                    version: String::new(),
                     priority: 0,
                     block_enabled: false,
                     active: false,

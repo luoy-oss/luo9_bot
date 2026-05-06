@@ -1,6 +1,6 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0-beta.6"
+version = "0.1.0-beta.7"
 edition = "2024"
 authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人"
@@ -17,7 +17,7 @@ luo9_sdk = "0.6.0"
 # luo9_sdk = { path = "H:\\github\\luo9_bot\\sdk\\rust" }
 
 # 异步运行时
-tokio = { version = "1.50.0", features = ["full"] }
+tokio = { version = "1.52.2", features = ["full"] }
 
 # WebSocket
 tokio-tungstenite = "0.29.0"
