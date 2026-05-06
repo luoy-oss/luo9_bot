@@ -116,6 +116,12 @@
       document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_secs);
       document.getElementById('stat-plugins').textContent = data.plugin_count;
       document.getElementById('stat-dir').textContent = data.plugin_dir;
+      const verEl = document.getElementById('bot-version');
+      if (verEl) {
+        const bot = data.bot_version || '?';
+        const webui = data.webui_version || '?';
+        verEl.textContent = `Bot v${bot} · WebUI v${webui}`;
+      }
     } catch (e) {
       console.error('获取状态失败:', e);
     }

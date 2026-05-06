@@ -60,6 +60,17 @@ body {
   text-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+.header-version {
+  font-size: 0.55em;
+  font-weight: 400;
+  opacity: 0.75;
+  background: rgba(255,255,255,0.15);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 .header-status {
   display: flex;
   align-items: center;
