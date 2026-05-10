@@ -72,7 +72,11 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for GlobalWriterMaker {
 }
 
 pub fn init(level: &str) {
-    let filter = EnvFilter::new(level);
+    let mut filter = EnvFilter::new(level);
+    // 屏蔽第三方网络库的 debug 日志
+    for noisy in ["reqwest", "h2", "hyper_util", "rustls_platform_verifier", "rustls"] {
+        filter = filter.add_directive(format!("{}=warn", noisy).parse().unwrap());
+    }
 
     fmt::Subscriber::builder()
         .with_env_filter(filter)
