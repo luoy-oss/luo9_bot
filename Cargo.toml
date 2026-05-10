@@ -58,6 +58,6 @@ path = "src/main.rs"
 
 [profile.release]
 opt-level = 3      # 优化目标：最大执行速度
-lto = "fat"        # 启用最激进的链接时优化
-codegen-units = 1  # 减少代码生成单元数量，提高优化效果
+lto = "thin"        # 启用最激进的链接时优化
+codegen-units = 16  # 减少代码生成单元数量，提高优化效果
 panic = "abort"    # 使用"abort"而非"unwind"处理恐慌\
