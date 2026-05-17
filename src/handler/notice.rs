@@ -29,6 +29,15 @@ pub fn handle_notice(notice: Notice) -> Result<()> {
         NoticeType::Notify => {
             dispatch_notice(notice);
         },
+        NoticeType::GroupIncrease => {
+            dispatch_notice(notice);
+        },
+        NoticeType::GroupDecrease => {
+            dispatch_notice(notice);
+        },
+        NoticeType::FriendAdd => {
+            dispatch_notice(notice);
+        },
         _ => {
             warn!("不支持的通知类型: {:?}", notice.notice_type);
             return Err(LNErr::UnknownNoticeType);

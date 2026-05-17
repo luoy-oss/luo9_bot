@@ -56,6 +56,7 @@ impl Serialize for MsgType {
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Message {
+    pub message_id: u64,
     pub message_type: MsgType,
     pub user_id: u64,
     pub group_id: Option<u64>,
@@ -78,6 +79,7 @@ impl Message {
             Some("group") => MsgType::Group,
             _ => MsgType::Other,
         };
+        let message_id = data.get("message_id").and_then(|v| v.as_u64()).unwrap_or(0);
 
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
 
@@ -90,6 +92,7 @@ impl Message {
         let message = decode_html_entities(&message);
 
         Self{
+            message_id,
             message_type,
             user_id,
             group_id,
