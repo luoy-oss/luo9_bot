@@ -1,6 +1,6 @@
 // src/plugin/dispatch.rs
 use std::sync::RwLock;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::bus::Bus;
 use super::manager::DispatchEntry;
@@ -41,6 +41,8 @@ pub fn priority_dispatch_message(msg: Message) {
             return;
         }
     };
+
+    // debug!("payload: {}", payload);
 
     let list = match DISPATCH_LIST.read() {
         Ok(list) => list,

@@ -11,3 +11,5 @@ build.rs
 .claude/
 
 Cargo.lock
+
+*.temp
