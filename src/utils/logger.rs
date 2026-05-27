@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::Mutex;
+use std::sync::{Mutex, Once};
 use tracing_subscriber::fmt;
 use tracing_subscriber::filter::EnvFilter;
+
+/// 确保日志系统只初始化一次
+static INIT: Once = Once::new();
 
 /// 全局日志缓冲区，存储最近的日志行供 WebUI 读取
 pub static LOG_BUFFER: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
@@ -72,19 +75,21 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for GlobalWriterMaker {
 }
 
 pub fn init(level: &str) {
-    let mut filter = EnvFilter::new(level);
-    // 屏蔽第三方网络库的 debug 日志
-    for noisy in ["reqwest", "h2", "hyper_util", "rustls_platform_verifier", "rustls"] {
-        filter = filter.add_directive(format!("{}=warn", noisy).parse().unwrap());
-    }
+    INIT.call_once(|| {
+        let mut filter = EnvFilter::new(level);
+        // 屏蔽第三方网络库的 debug 日志
+        for noisy in ["reqwest", "h2", "hyper_util", "rustls_platform_verifier", "rustls"] {
+            filter = filter.add_directive(format!("{}=warn", noisy).parse().unwrap());
+        }
 
-    fmt::Subscriber::builder()
-        .with_env_filter(filter)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_ansi(true)
-        .with_writer(GlobalWriterMaker)
-        .init();
+        fmt::Subscriber::builder()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_ansi(true)
+            .with_writer(GlobalWriterMaker)
+            .init();
 
-    tracing::info!("日志系统已初始化，级别: {}", level);
+        tracing::info!("日志系统已初始化，级别: {}", level);
+    });
 }
