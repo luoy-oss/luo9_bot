@@ -3,7 +3,7 @@ use std::sync::RwLock;
 use tracing::{debug, error, info};
 
 use super::bus::Bus;
-use super::manager::DispatchEntry;
+use super::manager::{DispatchEntry, GLOBAL_PLUGIN_MANAGER};
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
@@ -62,12 +62,23 @@ pub fn priority_dispatch_message(msg: Message) {
             info!("[dispatch] 跳过 {} (未订阅 luo9_message)", entry.name);
             continue;
         };
+
+        let start = std::time::Instant::now();
         match Bus::topic(super::bus::TOPIC_MESSAGE).publish_to(&payload, &[sub_id]) {
             Ok(()) => {
-                info!("[dispatch] 已分发消息到 {} (sub_id={}, priority={})", entry.name, sub_id, entry.priority);
+                let elapsed = start.elapsed().as_micros() as u64;
+                info!("[dispatch] 已分发消息到 {} (sub_id={}, priority={}, 耗时={}μs)", entry.name, sub_id, entry.priority, elapsed);
+
+                // 更新统计
+                if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                    manager.update_message_stats(&entry.name, elapsed);
+                }
             }
             Err(e) => {
                 error!("[dispatch] 定向分发消息到 {} 失败: {:?}", entry.name, e);
+                if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                    manager.update_error_stats(&entry.name);
+                }
             }
         }
         if entry.block_enabled {
@@ -101,8 +112,18 @@ pub fn priority_dispatch_notice(notice: Notice) {
 
     for entry in list.iter() {
         let Some(sub_id) = entry.notice_sub_id else { continue };
+
+        let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_NOTICE).publish_to(&payload, &[sub_id]) {
             error!("定向分发通知到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_notice_stats(&entry.name, elapsed);
+            }
         }
         if entry.block_enabled {
             break;
@@ -134,8 +155,18 @@ pub fn priority_dispatch_meta_event(event: MetaEvent) {
 
     for entry in list.iter() {
         let Some(sub_id) = entry.meta_event_sub_id else { continue };
+
+        let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_META_EVENT).publish_to(&payload, &[sub_id]) {
             error!("定向分发元事件到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_meta_event_stats(&entry.name, elapsed);
+            }
         }
         if entry.block_enabled {
             break;

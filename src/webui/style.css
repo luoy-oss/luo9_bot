@@ -74,9 +74,21 @@ body {
 .header-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   color: rgba(255,255,255,0.9);
   font-size: 0.9em;
+}
+
+.btn-restart {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+  color: white;
+  font-size: 0.8em;
+  padding: 5px 12px;
+}
+
+.btn-restart:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 .status-dot {
@@ -125,6 +137,57 @@ body {
 .stat-icon { font-size: 1.6em; margin-bottom: 4px; }
 .stat-value { font-size: 1.5em; font-weight: 700; color: var(--accent-dark); }
 .stat-label { font-size: 0.8em; color: var(--text-light); }
+
+/* ── Donut Chart ──────────────────────── */
+.stat-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 4px;
+}
+
+.donut-chart {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donut-bg {
+  opacity: 0.3;
+}
+
+.donut-segment {
+  transition: stroke-dasharray 0.5s ease;
+}
+
+.chart-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.chart-value {
+  display: block;
+  font-size: 1.2em;
+  font-weight: 700;
+  color: var(--accent-dark);
+  line-height: 1;
+}
+
+.chart-label {
+  display: block;
+  font-size: 0.6em;
+  color: var(--text-light);
+}
 
 /* ── Tabs ──────────────────────────────── */
 .tabs {
@@ -204,6 +267,27 @@ body {
 .plugin-name { font-weight: 700; font-size: 0.95em; }
 .plugin-desc { font-size: 0.82em; color: var(--text-light); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plugin-file { font-size: 0.75em; color: var(--text-muted); margin-top: 2px; font-family: "Cascadia Code", "Fira Code", monospace; }
+
+.plugin-stats {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.stat-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+.stat-badge.stat-error {
+  background: rgba(255, 138, 158, 0.2);
+  color: var(--danger-dark);
+}
 .plugin-controls {
   display: flex;
   align-items: center;
@@ -600,6 +684,88 @@ body {
 @keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes logFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes dialogIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* ── Restart Progress ─────────────────── */
+.restart-progress {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 320px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  z-index: 1000;
+  transform: translateY(120%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.restart-progress.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.restart-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.restart-progress-icon {
+  font-size: 1.5em;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.restart-progress-title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.95em;
+}
+
+.restart-progress-bar-container {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.restart-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--mint));
+  border-radius: 4px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.restart-progress-bar.error {
+  background: var(--danger);
+}
+
+.restart-progress-bar.success {
+  background: var(--success);
+}
+
+.restart-progress-message {
+  font-size: 0.8em;
+  color: var(--text-light);
+  text-align: center;
+}
+
+.restart-progress-message.error {
+  color: var(--danger-dark);
+}
+
+.restart-progress-message.success {
+  color: var(--mint-dark);
+}
 
 /* ── Download Progress ─────────────────── */
 .download-progress {

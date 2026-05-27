@@ -7,7 +7,7 @@ use libloading::Library;
 use tracing::{info, error, warn};
 
 use super::handle::PluginHandle;
-use super::manager::PluginInfo;
+use super::manager::{PluginInfo, PluginStats};
 use super::bus::{Bus, TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_TASK, TOPIC_SEND};
 
 /// 插件加载器
@@ -89,6 +89,7 @@ impl PluginLoader {
                 priority: 0,
                 block_enabled: false,
                 active: has_main,
+                stats: PluginStats::default(),
             };
 
             let handle = if has_main {
@@ -256,6 +257,7 @@ pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo,
             priority: 0,
             block_enabled: false,
             active: has_main,
+            stats: PluginStats::default(),
         };
 
         let handle = if has_main {

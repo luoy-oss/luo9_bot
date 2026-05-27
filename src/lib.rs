@@ -18,9 +18,18 @@ pub mod webui;
 
 use config::LNConfig;
 use error::Result;
-use tracing::info;
+use tracing::{info, warn};
+use tokio::sync::watch;
 
 use plugin as Plugin;
+
+/// 全局重启信号
+lazy_static::lazy_static! {
+    pub static ref RESTART_TX: watch::Sender<bool> = {
+        let (tx, _rx) = watch::channel(false);
+        tx
+    };
+}
 
 
 /// 应用上下文
@@ -71,16 +80,16 @@ impl LNContext {
     /// 启动应用
     pub async fn run(&self) -> Result<()> {
         info!("启动 Napcat Bridge...");
-        
+
         let rx = self.rx.clone();
         tokio::spawn(async move {
             if let Err(e) = rx.start().await {
                 tracing::error!("接收器启动失败: {}", e);
             }
         });
-        
+
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         match self.tx.get_login_info().await {
             Ok(_info) => {
                 info!("✓ Napcat API 连接成功");
@@ -88,15 +97,36 @@ impl LNContext {
             }
             Err(e) => {
                 tracing::warn!("⚠ Napcat API 连接失败: {}", e);
-                tracing::warn!("请确保 Napcat 已启动并监听 {}:{}", 
+                tracing::warn!("请确保 Napcat 已启动并监听 {}:{}",
                     self.config.napcat.ws_server_host,
                     self.config.napcat.ws_server_port);
             }
         }
-        
+
         info!("应用已启动，等待消息...");
-        
+
         Ok(())
+    }
+
+    /// 释放资源（用于重启）
+    pub async fn shutdown(&self) {
+        info!("正在释放资源...");
+
+        // 禁用所有插件
+        let mut manager = plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+        let plugins = manager.get_all_plugins().to_vec();
+        for plugin_info in plugins {
+            if plugin_info.active {
+                info!("正在禁用插件: {}", plugin_info.name);
+                match manager.disable_plugin(&plugin_info.name).await {
+                    Ok(msg) => info!("{}", msg),
+                    Err(e) => warn!("禁用插件 {} 失败: {}", plugin_info.name, e),
+                }
+            }
+        }
+        drop(manager);
+
+        info!("资源释放完成");
     }
 }
 
