@@ -24,11 +24,12 @@ use crate::utils::logger;
 const REGISTRY_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
 
 /// GitHub Raw 镜像前缀列表（用于 raw.githubusercontent.com 访问）
+/// 格式：代理服务器地址 + "/"，拼接时会自动组合完整 URL
 const GITHUB_RAW_MIRRORS: &[&str] = &[
-    "https://github.chenc.dev/https://raw.githubusercontent.com",
-    "https://ghproxy.cfd/https://raw.githubusercontent.com",
-    "https://ghproxy.cc/https://raw.githubusercontent.com",
-    "https://gh-proxy.net/https://raw.githubusercontent.com",
+    "https://github.chenc.dev/",
+    "https://ghproxy.cfd/",
+    "https://ghproxy.cc/",
+    "https://gh-proxy.net/",
 ];
 
 /// GitHub release 下载镜像前缀列表（用于 release assets 下载）
