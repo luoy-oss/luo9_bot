@@ -677,6 +677,139 @@ body {
   color: var(--mint-dark);
 }
 
+/* ── Mirror Management ─────────────────── */
+.mirror-desc {
+  font-size: 0.85em;
+  color: var(--text-light);
+  margin-bottom: 20px;
+}
+
+.mirror-section {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.mirror-section h3 {
+  margin: 0 0 16px;
+  font-size: 0.95em;
+  color: var(--accent-dark);
+}
+
+.mirror-preferred {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+}
+
+.mirror-status {
+  flex: 1;
+  font-size: 0.9em;
+  color: var(--text-light);
+}
+
+.mirror-status.mirror-selected {
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.mirror-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mirror-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  transition: all var(--transition);
+}
+
+.mirror-item:hover {
+  border-color: var(--accent-light);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.mirror-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mirror-rank {
+  font-weight: 700;
+  color: var(--accent-dark);
+  font-size: 0.85em;
+  min-width: 24px;
+}
+
+.mirror-url {
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.8em;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mirror-latency {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.mirror-latency.fast {
+  background: rgba(125, 212, 168, 0.2);
+  color: #3a9d6a;
+}
+
+.mirror-latency.medium {
+  background: rgba(255, 213, 128, 0.2);
+  color: #b8860b;
+}
+
+.mirror-latency.slow {
+  background: rgba(255, 138, 158, 0.2);
+  color: var(--danger-dark);
+}
+
+.mirror-speed {
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.mirror-empty, .mirror-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.mirror-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mirror-last-check {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
 /* ── Responsive ────────────────────────── */
 @media (max-width: 640px) {
   .stats { grid-template-columns: 1fr; }
@@ -685,4 +818,6 @@ body {
   .container { padding: 16px 12px 32px; }
   .plugin-item { flex-wrap: wrap; }
   .plugin-meta { width: 100%; justify-content: flex-end; margin-top: 8px; }
+  .mirror-item { flex-wrap: wrap; }
+  .mirror-info { width: 100%; }
 }

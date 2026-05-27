@@ -102,6 +102,8 @@
         if (btn.dataset.tab === 'store') refreshStore();
         // 切换到配置时加载
         if (btn.dataset.tab === 'config') refreshConfig();
+        // 切换到镜像时加载
+        if (btn.dataset.tab === 'mirrors') refreshMirrors();
       });
     });
   }
@@ -694,6 +696,121 @@
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // ── 镜像管理 ───────────────────────────
+  let mirrorsData = null;
+
+  async function refreshMirrors() {
+    try {
+      // 获取镜像状态
+      const resp = await fetch(apiUrl('/api/mirrors'));
+      mirrorsData = await resp.json();
+
+      // 获取用户偏好的镜像
+      const prefResp = await fetch(apiUrl('/api/mirrors/preferred'));
+      const prefData = await prefResp.json();
+
+      // 渲染用户偏好的镜像
+      renderPreferredMirror(prefData.preferred);
+
+      // 渲染 Raw 镜像列表
+      renderMirrorList('raw-mirrors-list', mirrorsData.raw_mirrors || [], 'raw');
+
+      // 渲染 Release 镜像列表
+      renderMirrorList('release-mirrors-list', mirrorsData.release_mirrors || [], 'release');
+
+      // 更新最后检查时间
+      const lastCheckEl = document.getElementById('mirror-last-check');
+      if (lastCheckEl) {
+        if (mirrorsData.last_check !== null && mirrorsData.last_check !== undefined) {
+          lastCheckEl.textContent = `上次检查: ${formatUptime(mirrorsData.last_check)}前`;
+        } else {
+          lastCheckEl.textContent = '镜像检查尚未完成';
+        }
+      }
+    } catch (e) {
+      console.error('获取镜像状态失败:', e);
+    }
+  }
+
+  function renderPreferredMirror(preferred) {
+    const container = document.getElementById('preferred-mirror');
+    if (!container) return;
+
+    if (preferred) {
+      container.innerHTML = `
+        <span class="mirror-status mirror-selected">已选择: ${esc(preferred)}</span>
+        <button class="btn btn-sm" onclick="clearPreferredMirror()">恢复自动选择</button>
+      `;
+    } else {
+      container.innerHTML = `
+        <span class="mirror-status">未选择（使用自动选择）</span>
+        <button class="btn btn-sm" onclick="clearPreferredMirror()">恢复自动选择</button>
+      `;
+    }
+  }
+
+  function renderMirrorList(containerId, mirrors, mirrorType) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (mirrors.length === 0) {
+      container.innerHTML = '<div class="mirror-empty">暂无可用镜像</div>';
+      return;
+    }
+
+    container.innerHTML = mirrors.map((mirror, index) => {
+      const latency = mirror.latency_ms || 0;
+      const latencyClass = latency < 500 ? 'fast' : latency < 1000 ? 'medium' : 'slow';
+      const speedText = mirror.download_speed ? `${mirror.download_speed.toFixed(1)} KB/s` : '';
+
+      return `
+        <div class="mirror-item">
+          <div class="mirror-info">
+            <span class="mirror-rank">#${index + 1}</span>
+            <span class="mirror-url">${esc(mirror.url)}</span>
+            <span class="mirror-latency ${latencyClass}">${latency}ms</span>
+            ${speedText ? `<span class="mirror-speed">${speedText}</span>` : ''}
+          </div>
+          <button class="btn btn-sm btn-accent" onclick="selectMirror('${esc(mirror.url)}', '${mirrorType}')">
+            选择
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.selectMirror = async function (mirror, mirrorType) {
+    try {
+      const resp = await fetch(apiUrl('/api/mirrors/select'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mirror, mirror_type: mirrorType }),
+      });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+      if (data.ok) {
+        refreshMirrors();
+      }
+    } catch (e) {
+      showToast('选择镜像失败: ' + e.message, false);
+    }
+  };
+
+  window.clearPreferredMirror = async function () {
+    try {
+      const resp = await fetch(apiUrl('/api/mirrors/select'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mirror: '', mirror_type: 'raw' }),
+      });
+      const data = await resp.json();
+      showToast('已恢复自动选择镜像', true);
+      refreshMirrors();
+    } catch (e) {
+      showToast('恢复自动选择失败: ' + e.message, false);
+    }
+  };
 
   // ── 配置编辑器 ─────────────────────────
   let currentConfig = null;
