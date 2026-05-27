@@ -705,17 +705,29 @@ body {
   background: var(--card);
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--border);
+  flex-wrap: wrap;
 }
 
 .mirror-status {
   flex: 1;
   font-size: 0.9em;
   color: var(--text-light);
+  min-width: 200px;
 }
 
 .mirror-status.mirror-selected {
   color: var(--accent-dark);
   font-weight: 600;
+}
+
+.mirror-url-full {
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
 }
 
 .mirror-list {

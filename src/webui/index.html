@@ -187,14 +187,14 @@
   <div class="tab-content" id="tab-mirrors">
     <div class="section">
       <div class="section-title">🌐 镜像管理</div>
-      <p class="mirror-desc">选择下载插件时使用的镜像源，系统会自动检测镜像可用性和延迟</p>
+      <p class="mirror-desc">系统默认使用延迟最低的镜像，您也可以手动选择固定的镜像源</p>
 
-      <!-- 用户选择的镜像 -->
+      <!-- 当前选择的镜像 -->
       <div class="mirror-section">
-        <h3>当前选择的镜像</h3>
-        <div id="preferred-mirror" class="mirror-preferred">
-          <span class="mirror-status">未选择（使用自动选择）</span>
-          <button class="btn btn-sm" onclick="clearPreferredMirror()">恢复自动选择</button>
+        <h3>当前使用的镜像</h3>
+        <div id="current-mirror" class="mirror-preferred">
+          <span class="mirror-status">自动选择最优镜像</span>
+          <button class="btn btn-sm" onclick="clearMirrorSelection()">恢复自动选择</button>
         </div>
       </div>
 

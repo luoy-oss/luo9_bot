@@ -706,12 +706,8 @@
       const resp = await fetch(apiUrl('/api/mirrors'));
       mirrorsData = await resp.json();
 
-      // 获取用户偏好的镜像
-      const prefResp = await fetch(apiUrl('/api/mirrors/preferred'));
-      const prefData = await prefResp.json();
-
-      // 渲染用户偏好的镜像
-      renderPreferredMirror(prefData.preferred);
+      // 渲染当前选择的镜像
+      renderCurrentMirror(mirrorsData.user_selected_mirror);
 
       // 渲染 Raw 镜像列表
       renderMirrorList('raw-mirrors-list', mirrorsData.raw_mirrors || [], 'raw');
@@ -733,19 +729,28 @@
     }
   }
 
-  function renderPreferredMirror(preferred) {
-    const container = document.getElementById('preferred-mirror');
+  function renderCurrentMirror(userSelected) {
+    const container = document.getElementById('current-mirror');
     if (!container) return;
 
-    if (preferred) {
+    if (userSelected) {
+      // 从 URL 中提取镜像主机名
+      let displayName = userSelected;
+      try {
+        const url = new URL(userSelected);
+        displayName = url.hostname;
+      } catch (e) {
+        // 保持原始显示
+      }
       container.innerHTML = `
-        <span class="mirror-status mirror-selected">已选择: ${esc(preferred)}</span>
-        <button class="btn btn-sm" onclick="clearPreferredMirror()">恢复自动选择</button>
+        <span class="mirror-status mirror-selected">手动选择: ${esc(displayName)}</span>
+        <span class="mirror-url-full">${esc(userSelected)}</span>
+        <button class="btn btn-sm" onclick="clearMirrorSelection()">恢复自动选择</button>
       `;
     } else {
       container.innerHTML = `
-        <span class="mirror-status">未选择（使用自动选择）</span>
-        <button class="btn btn-sm" onclick="clearPreferredMirror()">恢复自动选择</button>
+        <span class="mirror-status">自动选择最优镜像（按延迟排序）</span>
+        <button class="btn btn-sm" onclick="clearMirrorSelection()">恢复自动选择</button>
       `;
     }
   }
@@ -762,7 +767,6 @@
     container.innerHTML = mirrors.map((mirror, index) => {
       const latency = mirror.latency_ms || 0;
       const latencyClass = latency < 500 ? 'fast' : latency < 1000 ? 'medium' : 'slow';
-      const speedText = mirror.download_speed ? `${mirror.download_speed.toFixed(1)} KB/s` : '';
 
       return `
         <div class="mirror-item">
@@ -770,7 +774,6 @@
             <span class="mirror-rank">#${index + 1}</span>
             <span class="mirror-url">${esc(mirror.url)}</span>
             <span class="mirror-latency ${latencyClass}">${latency}ms</span>
-            ${speedText ? `<span class="mirror-speed">${speedText}</span>` : ''}
           </div>
           <button class="btn btn-sm btn-accent" onclick="selectMirror('${esc(mirror.url)}', '${mirrorType}')">
             选择
@@ -797,7 +800,7 @@
     }
   };
 
-  window.clearPreferredMirror = async function () {
+  window.clearMirrorSelection = async function () {
     try {
       const resp = await fetch(apiUrl('/api/mirrors/select'), {
         method: 'PUT',
@@ -805,7 +808,7 @@
         body: JSON.stringify({ mirror: '', mirror_type: 'raw' }),
       });
       const data = await resp.json();
-      showToast('已恢复自动选择镜像', true);
+      showToast('已恢复自动选择最优镜像', true);
       refreshMirrors();
     } catch (e) {
       showToast('恢复自动选择失败: ' + e.message, false);
