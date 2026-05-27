@@ -44,6 +44,7 @@
     <button class="tab active" data-tab="installed">🧩 已安装</button>
     <button class="tab" data-tab="store">🏪 插件商店</button>
     <button class="tab" data-tab="config">⚙️ 配置</button>
+    <button class="tab" data-tab="mirrors">🌐 镜像</button>
     <button class="tab" data-tab="logs">📜 日志</button>
   </div>
 
@@ -179,6 +180,44 @@
           <button class="btn btn-accent" onclick="saveRawConfig()">保存原始配置</button>
         </div>
       </details>
+    </div>
+  </div>
+
+  <!-- Tab: 镜像管理 -->
+  <div class="tab-content" id="tab-mirrors">
+    <div class="section">
+      <div class="section-title">🌐 镜像管理</div>
+      <p class="mirror-desc">系统默认使用延迟最低的镜像，您也可以手动选择固定的镜像源</p>
+
+      <!-- 当前选择的镜像 -->
+      <div class="mirror-section">
+        <h3>当前使用的镜像</h3>
+        <div id="current-mirror" class="mirror-preferred">
+          <span class="mirror-status">自动选择最优镜像</span>
+          <button class="btn btn-sm" onclick="clearMirrorSelection()">恢复自动选择</button>
+        </div>
+      </div>
+
+      <!-- Raw 镜像列表 -->
+      <div class="mirror-section">
+        <h3>Raw 文件镜像（用于注册表访问）</h3>
+        <div id="raw-mirrors-list" class="mirror-list">
+          <div class="mirror-loading">正在加载镜像状态...</div>
+        </div>
+      </div>
+
+      <!-- Release 镜像列表 -->
+      <div class="mirror-section">
+        <h3>Release 镜像（用于插件下载）</h3>
+        <div id="release-mirrors-list" class="mirror-list">
+          <div class="mirror-loading">正在加载镜像状态...</div>
+        </div>
+      </div>
+
+      <div class="mirror-actions">
+        <button class="btn btn-accent" onclick="refreshMirrors()">🔄 刷新镜像状态</button>
+        <span id="mirror-last-check" class="mirror-last-check"></span>
+      </div>
     </div>
   </div>
 

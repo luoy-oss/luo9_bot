@@ -23,19 +23,61 @@ use crate::utils::logger;
 
 const REGISTRY_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
 
-/// GitHub 资源镜像前缀列表（按优先级排序）
-/// 每个前缀会拼接在原始 URL 的前面（去掉 https:// 前缀）
+/// GitHub Raw 镜像前缀列表（用于 raw.githubusercontent.com 访问）
+/// 格式：代理服务器地址 + "/"，拼接时会自动组合完整 URL
 const GITHUB_RAW_MIRRORS: &[&str] = &[
-    "https://ghfast.top/",
-    "https://ghproxy.cn/",
-    "https://raw.gitmirror.com/",
+    "https://github.chenc.dev/",
+    "https://ghproxy.cfd/",
+    "https://ghproxy.cc/",
+    "https://gh-proxy.net/",
 ];
 
-/// GitHub release 下载镜像前缀列表
+/// GitHub release 下载镜像前缀列表（用于 release assets 下载）
 const GITHUB_RELEASE_MIRRORS: &[&str] = &[
-    "https://ghfast.top/",
-    "https://ghproxy.cn/",
-    "https://mirror.ghproxy.com/",
+    "https://github.chenc.dev/",
+    "https://ghproxy.cfd/",
+    "https://github.tbedu.top/",
+    "https://ghproxy.cc/",
+    "https://gh.monlor.com/",
+    "https://cdn.akaere.online/",
+    "https://gh.idayer.com/",
+    "https://gh.llkk.cc/",
+    "https://ghpxy.hwinzniej.top/",
+    "https://github-proxy.memory-echoes.cn/",
+    "https://git.yylx.win/",
+    "https://gitproxy.mrhjx.cn/",
+    "https://gh.fhjhy.top/",
+    "https://gp.zkitefly.eu.org/",
+    "https://gh-proxy.com/",
+    "https://ghfile.geekertao.top/",
+    "https://j.1lin.dpdns.org/",
+    "https://ghproxy.imciel.com/",
+    "https://github-proxy.teach-english.tech/",
+    "https://gh.927223.xyz/",
+    "https://github.ednovas.xyz/",
+    "https://ghf.xn--eqrr82bzpe.top/",
+    "https://gh.dpik.top/",
+    "https://gh.jasonzeng.dev/",
+    "https://gh.xxooo.cf/",
+    "https://gh.bugdey.us.kg/",
+    "https://ghm.078465.xyz/",
+    "https://j.1win.ggff.net/",
+    "https://tvv.tw/",
+    "https://gitproxy.127731.xyz/",
+    "https://gh.inkchills.cn/",
+    "https://ghproxy.cxkpro.top/",
+    "https://gh.sixyin.com/",
+    "https://github.geekery.cn/",
+    "https://git.669966.xyz/",
+    "https://gh.5050net.cn/",
+    "https://gh.felicity.ac.cn/",
+    "https://github.dpik.top/",
+    "https://ghp.keleyaa.com/",
+    "https://gh.wsmdn.dpdns.org/",
+    "https://ghproxy.monkeyray.net/",
+    "https://fastgit.cc/",
+    "https://gh.catmak.name/",
+    "https://gh.noki.icu/",
 ];
 
 /// HTTP 请求超时时间
@@ -93,6 +135,9 @@ struct MirrorStatus {
     url: String,
     latency_ms: u64,
     available: bool,
+    /// 下载速度（KB/s），仅在测试时填充
+    #[serde(skip_serializing_if = "Option::is_none")]
+    download_speed: Option<f64>,
 }
 
 /// 镜像健康检查缓存
@@ -114,6 +159,8 @@ pub struct WebuiState {
     pub progress_tx: broadcast::Sender<DownloadProgress>,
     /// 镜像健康检查缓存
     pub mirror_cache: Arc<RwLock<Option<MirrorCache>>>,
+    /// 用户手动选择的镜像（None 表示自动选择最优）
+    pub user_selected_mirror: Arc<RwLock<Option<String>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -259,6 +306,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
 
     // 镜像健康检查缓存
     let mirror_cache = Arc::new(RwLock::new(None));
+    let user_selected_mirror = Arc::new(RwLock::new(None));
 
     let state = Arc::new(WebuiState {
         plugin_dir,
@@ -269,6 +317,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         token: token.clone(),
         progress_tx,
         mirror_cache: mirror_cache.clone(),
+        user_selected_mirror: user_selected_mirror.clone(),
     });
 
     // 启动镜像健康检查任务（后台预热）
@@ -311,6 +360,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/config/raw", get(api_config_raw_get).put(api_config_raw_put))
         .route("/api/download-progress", get(api_download_progress))
         .route("/api/mirrors", get(api_mirrors))
+        .route("/api/mirrors/select", put(api_mirror_select))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
@@ -469,6 +519,7 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
                 url: mirror.to_string(),
                 latency_ms: latency,
                 available: result.map(|r| r.status().is_success()).unwrap_or(false),
+                download_speed: None,
             }
         }
     }).collect();
@@ -486,6 +537,7 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
                 url: mirror.to_string(),
                 latency_ms: latency,
                 available: result.map(|r| r.status().is_success()).unwrap_or(false),
+                download_speed: None,
             }
         }
     }).collect();
@@ -520,11 +572,20 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
     );
 }
 
-/// 获取可用镜像列表（优先使用缓存）
+/// 获取可用镜像列表（优先使用用户选择，否则按延迟排序）
 async fn get_available_mirrors(
     cache: &Arc<RwLock<Option<MirrorCache>>>,
+    user_selected: &Arc<RwLock<Option<String>>>,
     mirror_type: &str, // "raw" 或 "release"
 ) -> Vec<String> {
+    // 优先使用用户手动选择的镜像
+    let selected_read = user_selected.read().await;
+    if let Some(ref mirror) = *selected_read {
+        return vec![mirror.clone()];
+    }
+    drop(selected_read);
+
+    // 否则使用缓存中延迟最低的镜像
     let cache_read = cache.read().await;
 
     if let Some(ref cache_data) = *cache_read {
@@ -536,7 +597,7 @@ async fn get_available_mirrors(
                 _ => return Vec::new(),
             };
 
-            // 返回可用镜像 URL
+            // 返回可用镜像 URL（已按延迟排序）
             return mirrors.iter().map(|m| m.url.clone()).collect();
         }
     }
@@ -552,6 +613,7 @@ async fn get_available_mirrors(
 /// 返回镜像健康状态
 async fn api_mirrors(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
     let cache_read = state.mirror_cache.read().await;
+    let user_selected = state.user_selected_mirror.read().await;
 
     if let Some(ref cache_data) = *cache_read {
         Json(serde_json::json!({
@@ -559,6 +621,7 @@ async fn api_mirrors(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
             "raw_mirrors": cache_data.raw_mirrors,
             "release_mirrors": cache_data.release_mirrors,
             "last_check": cache_data.last_check.elapsed().as_secs(),
+            "user_selected_mirror": *user_selected,
         }))
     } else {
         Json(serde_json::json!({
@@ -566,9 +629,47 @@ async fn api_mirrors(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
             "raw_mirrors": [],
             "release_mirrors": [],
             "last_check": null,
+            "user_selected_mirror": *user_selected,
             "message": "镜像健康检查尚未完成",
         }))
     }
+}
+
+/// 用户手动选择镜像
+#[derive(Deserialize)]
+struct MirrorSelectRequest {
+    mirror: String,
+    mirror_type: String, // "raw" 或 "release"
+}
+
+async fn api_mirror_select(
+    State(state): State<Arc<WebuiState>>,
+    Json(req): Json<MirrorSelectRequest>,
+) -> impl IntoResponse {
+    // 如果镜像为空，则清除用户选择，恢复自动选择
+    if req.mirror.is_empty() {
+        let mut selected = state.user_selected_mirror.write().await;
+        *selected = None;
+        info!("已清除用户镜像选择，恢复自动选择最优镜像");
+        return json_ok("已恢复自动选择最优镜像");
+    }
+
+    // 验证镜像 URL 是否在允许列表中
+    let valid_mirrors = match req.mirror_type.as_str() {
+        "raw" => GITHUB_RAW_MIRRORS,
+        "release" => GITHUB_RELEASE_MIRRORS,
+        _ => return json_err(StatusCode::BAD_REQUEST, "无效的镜像类型"),
+    };
+
+    if !valid_mirrors.contains(&req.mirror.as_str()) {
+        return json_err(StatusCode::BAD_REQUEST, "指定的镜像不在允许列表中");
+    }
+
+    let mut selected = state.user_selected_mirror.write().await;
+    *selected = Some(req.mirror.clone());
+
+    info!("用户已手动选择镜像: {}", req.mirror);
+    json_ok(&format!("已选择镜像: {}", req.mirror))
 }
 
 // ========== 状态 API ==========
@@ -614,8 +715,8 @@ async fn api_config_path() -> impl IntoResponse {
 // ========== 注册表 API ==========
 
 async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
-    // 获取可用镜像列表（优先使用缓存）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, "raw").await;
+    // 获取可用镜像列表（优先用户选择，否则按延迟排序）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
@@ -670,8 +771,8 @@ async fn api_plugin_install(
     Path(name): Path<String>,
     Query(q): Query<InstallQuery>,
 ) -> impl IntoResponse {
-    // 获取可用镜像列表（优先使用缓存）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, "raw").await;
+    // 获取可用镜像列表（优先用户选择，否则按延迟排序）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
@@ -714,8 +815,8 @@ async fn api_plugin_install(
         plugin.repo, version_entry.tag, asset_name
     );
 
-    // 获取可用镜像列表（优先使用缓存）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, "release").await;
+    // 获取可用镜像列表（优先用户选择，否则按延迟排序）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
     let download_urls = build_mirrored_urls(&primary_url, &available_mirrors.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
     info!("正在下载插件: {} v{}", name, version_entry.version);
@@ -729,8 +830,8 @@ async fn api_plugin_install(
     });
 
     // 带镜像 fallback 下载文件
-    let bytes = match download_with_fallback(&download_urls, &state.progress_tx, &name).await {
-        Ok(b) => b,
+    let (bytes, _used_url) = match download_with_fallback(&download_urls, &state.progress_tx, &name).await {
+        Ok((b, url)) => (b, url),
         Err(e) => {
             let _ = state.progress_tx.send(DownloadProgress {
                 plugin_name: name.clone(),
@@ -1303,13 +1404,13 @@ async fn fetch_with_fallback(urls: &[String]) -> Result<String, String> {
 
 /// 带镜像 fallback 的文件下载
 ///
-/// 依次尝试每个 URL，返回第一个成功的响应字节。
+/// 依次尝试每个 URL，返回第一个成功的响应字节和使用的 URL。
 /// 支持流式进度推送。
 async fn download_with_fallback(
     urls: &[String],
     progress_tx: &broadcast::Sender<DownloadProgress>,
     plugin_name: &str,
-) -> Result<Vec<u8>, String> {
+) -> Result<(Vec<u8>, String), String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 2))
         .build()
@@ -1384,7 +1485,7 @@ async fn download_with_fallback(
                         message: format!("下载完成: {:.1} KB", downloaded as f64 / 1024.0),
                         progress: Some(0.95),
                     });
-                    return Ok(bytes);
+                    return Ok((bytes, url.clone()));
                 }
             }
             Ok(resp) => {
