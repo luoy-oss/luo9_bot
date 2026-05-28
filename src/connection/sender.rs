@@ -16,45 +16,16 @@ pub struct Sender {
     timeout_seconds: u64,
 }
 
-/// 重试间隔（秒）
-const RETRY_INTERVAL_SECS: u64 = 3;
-/// 最大重试次数（0 表示无限重试）
-const MAX_RETRIES: u32 = 0;
-
 impl Sender {
+    /// 尝试单次连接（快速失败，不重试）
     pub async fn connect(host: impl Into<String>, port: u16, timeout_seconds: u64, token: impl Into<String>) -> Result<Self> {
         let host = host.into();
         let token = token.into();
         let url = format!("ws://{}:{}", host, port);
 
-        info!("连接 Napcat API: {} timeout_seconds： {} token: {}", url, timeout_seconds, token);
+        info!("尝试连接 Napcat API: {}", url);
 
-        let mut attempt = 0;
-        loop {
-            attempt += 1;
-
-            match Self::try_connect(&url, &token, timeout_seconds).await {
-                Ok(sender) => {
-                    info!("✓ Napcat API 连接成功 (第 {} 次尝试)", attempt);
-                    return Ok(sender);
-                }
-                Err(e) => {
-                    if MAX_RETRIES > 0 && attempt >= MAX_RETRIES {
-                        error!("Napcat API 连接失败，已达到最大重试次数 ({}): {}", MAX_RETRIES, e);
-                        return Err(e);
-                    }
-
-                    warn!("Napcat API 连接失败 (第 {} 次尝试): {}", attempt, e);
-                    warn!("{} 秒后重试...", RETRY_INTERVAL_SECS);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_INTERVAL_SECS)).await;
-                }
-            }
-        }
-    }
-
-    /// 尝试单次连接
-    async fn try_connect(url: &str, token: &str, timeout_seconds: u64) -> Result<Self> {
-        let mut request = url.to_string().into_client_request()?;
+        let mut request = url.clone().into_client_request()?;
 
         // 添加 Authorization Header
         request.headers_mut().insert("Authorization",
@@ -69,6 +40,8 @@ impl Sender {
             .map_err(|e| LNErr::Config(format!("WebSocket 连接错误: {}", e)))?;
 
         let (write, read) = ws_stream.split();
+
+        info!("✓ Napcat API 连接成功");
 
         Ok(Self {
             write: Arc::new(Mutex::new(write)),
