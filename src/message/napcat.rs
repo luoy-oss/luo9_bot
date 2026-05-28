@@ -1,40 +1,36 @@
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
+use crate::sub_type::SubType;
 
-/*
-{
-  "font": 14,
-  "group_id": 736215193,
-  "message": [
-    {
-      "data": {
-        "text": "eeeeeee"
-      },
-      "type": "text"
-    }
-  ],
-  "message_format": "array",
-  "message_id": 1471815977,
-  "message_seq": 1471815977,
-  "message_type": "group",
-  "post_type": "message",
-  "raw_message": "eeeeeee",
-  "real_id": 1471815977,
-  "real_seq": "46182",
-  "self_id": 512166443,
-  "sender": {
-    "card": "[QQ红包] 恭喜发财",
-    "nickname": "洛",
-    "role": "admin",
-    "user_id": 2557657882
-  },
-  "sub_type": "normal",
-  "time": 1774857824,
-  "user_id": 2557657882
+/// 消息发送者信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sender {
+    pub user_id: u64,
+    pub nickname: String,
+    #[serde(default)]
+    pub card: String,
+    #[serde(default)]
+    pub sex: String,
+    #[serde(default)]
+    pub age: u32,
+    #[serde(default)]
+    pub area: String,
+    #[serde(default)]
+    pub level: String,
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub title: String,
 }
-*/
 
+/// 匿名信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Anonymous {
+    pub id: u64,
+    pub name: String,
+    pub flag: String,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MsgType {
@@ -53,14 +49,28 @@ impl Serialize for MsgType {
     }
 }
 
-
+/// 完整的 OneBot v11 消息结构
+///
+/// `message` 字段为纯文本消息（raw_message），保持与 SDK 的兼容性。
 #[derive(Debug, Serialize, Clone)]
 pub struct Message {
-    pub message_id: u64,
+    pub time: u64,
+    pub self_id: u64,
+    pub post_type: String,
     pub message_type: MsgType,
+    pub sub_type: SubType,
+    pub message_id: u64,
+    pub message_seq: Option<u64>,
+    pub real_id: Option<u64>,
+    pub real_seq: Option<String>,
     pub user_id: u64,
     pub group_id: Option<u64>,
+    /// 纯文本消息内容（raw_message）
     pub message: String,
+    pub font: u32,
+    pub sender: Sender,
+    pub anonymous: Option<Anonymous>,
+    pub message_format: String,
 }
 
 fn decode_html_entities(s: &str) -> String {
@@ -79,24 +89,78 @@ impl Message {
             Some("group") => MsgType::Group,
             _ => MsgType::Other,
         };
-        let message_id = data.get("message_id").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        let sub_type = SubType::deserialize(
+            data.get("sub_type").unwrap_or(&Value::Null)
+        ).unwrap_or(SubType::None);
+
+        let message_id = data.get("message_id")
+            .and_then(|v| v.as_u64())
+            .or_else(|| data.get("message_id").and_then(|v| v.as_str().and_then(|s| s.parse().ok())))
+            .unwrap_or(0);
+
+        let message_seq = data.get("message_seq").and_then(|v| v.as_u64());
+        let real_id = data.get("real_id").and_then(|v| v.as_u64());
+        let real_seq = data.get("real_seq").and_then(|v| v.as_str()).map(|s| s.to_string());
 
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
-
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
 
-        let message = data.get("raw_message")
+        let raw_message = data.get("raw_message")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let message = decode_html_entities(&message);
+        let raw_message = decode_html_entities(&raw_message);
 
-        Self{
-            message_id,
+        let font = data.get("font").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+        let sender: Sender = data.get("sender")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or(Sender {
+                user_id,
+                nickname: String::new(),
+                card: String::new(),
+                sex: "unknown".to_string(),
+                age: 0,
+                area: String::new(),
+                level: String::new(),
+                role: "member".to_string(),
+                title: String::new(),
+            });
+
+        let anonymous = data.get("anonymous")
+            .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
+
+        let message_format = data.get("message_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("array")
+            .to_string();
+
+        let time = data.get("time").and_then(|v| v.as_u64()).unwrap_or(0);
+        let self_id = data.get("self_id").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        Self {
+            time,
+            self_id,
+            post_type: "message".to_string(),
             message_type,
+            sub_type,
+            message_id,
+            message_seq,
+            real_id,
+            real_seq,
             user_id,
             group_id,
-            message,
+            message: raw_message,  // 使用 raw_message 作为 message 字段
+            font,
+            sender,
+            anonymous,
+            message_format,
         }
+    }
+
+    /// 获取纯文本消息内容
+    pub fn get_text(&self) -> &str {
+        &self.message
     }
 }

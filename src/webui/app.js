@@ -132,6 +132,27 @@
         const webui = data.webui_version || '?';
         verEl.textContent = `Bot v${bot} · WebUI v${webui}`;
       }
+
+      // 更新 WebSocket 连接状态
+      const wsStatusEl = document.getElementById('ws-status');
+      const headerStatusText = document.getElementById('header-status-text');
+      if (data.ws_connected) {
+        if (wsStatusEl) {
+          wsStatusEl.className = 'ws-status ws-connected';
+          wsStatusEl.textContent = 'WS 已连接';
+        }
+        if (headerStatusText) {
+          headerStatusText.textContent = '运行中';
+        }
+      } else {
+        if (wsStatusEl) {
+          wsStatusEl.className = 'ws-status ws-disconnected';
+          wsStatusEl.textContent = 'WS 未连接';
+        }
+        if (headerStatusText) {
+          headerStatusText.textContent = 'WS 未连接';
+        }
+      }
     } catch (e) {
       console.error('获取状态失败:', e);
     }
@@ -166,10 +187,25 @@
   }
 
   // ── 已安装插件 ─────────────────────────
+  let pluginStatsData = {};
+
   async function refreshInstalled() {
     try {
-      const resp = await fetch(apiUrl('/api/plugins'));
-      const plugins = await resp.json();
+      const [pluginsResp, statsResp] = await Promise.all([
+        fetch(apiUrl('/api/plugins')),
+        fetch(apiUrl('/api/plugins/stats'))
+      ]);
+      const plugins = await pluginsResp.json();
+      const stats = await statsResp.json();
+
+      // 构建统计索引
+      pluginStatsData = {};
+      stats.forEach(s => { pluginStatsData[s.name] = s; });
+
+      // 更新圆环图
+      const active = plugins.filter(p => p.active).length;
+      updateDonutChart(active, plugins.length);
+
       const list = document.getElementById('installed-list');
       const empty = document.getElementById('installed-empty');
 
@@ -180,12 +216,23 @@
       }
       empty.style.display = 'none';
 
-      list.innerHTML = plugins.map((p, i) => `
-        <div class="plugin-item" style="animation-delay:${i * 0.05}s">
+      list.innerHTML = plugins.map((p, i) => {
+        const stats = pluginStatsData[p.name] || {};
+        const totalMessages = (stats.message_count || 0) + (stats.notice_count || 0) + (stats.meta_event_count || 0);
+        const avgTime = stats.avg_response_time_ms ? stats.avg_response_time_ms.toFixed(1) : '0';
+        const errorCount = stats.error_count || 0;
+
+        return `
+        <div class="plugin-item" style="animation-delay:${i * 0.05}s" data-plugin="${esc(p.name)}">
           <div class="plugin-info">
             <div class="plugin-name">
               ${esc(p.name)}
               ${p.version ? `<span class="plugin-version">v${esc(p.version)}</span>` : ''}
+            </div>
+            <div class="plugin-stats">
+              <span class="stat-badge" title="处理消息数">📨 ${totalMessages}</span>
+              <span class="stat-badge" title="平均响应时间">⚡ ${avgTime}ms</span>
+              ${errorCount > 0 ? `<span class="stat-badge stat-error" title="错误次数">❌ ${errorCount}</span>` : ''}
             </div>
             <div class="plugin-file">${esc(p.file)}</div>
             <div class="plugin-controls">
@@ -212,9 +259,22 @@
             <button class="btn btn-sm btn-danger" onclick="deletePlugin('${esc(p.name)}')">删除</button>
           </div>
         </div>
-      `).join('');
+        `;
+      }).join('');
     } catch (e) {
       console.error('获取插件列表失败:', e);
+    }
+  }
+
+  function updateDonutChart(active, total) {
+    const percent = total > 0 ? (active / total * 100) : 0;
+    const segment = document.getElementById('donut-active');
+    if (segment) {
+      segment.setAttribute('stroke-dasharray', `${percent} ${100 - percent}`);
+    }
+    const activeEl = document.getElementById('active-plugins');
+    if (activeEl) {
+      activeEl.textContent = active;
     }
   }
 
@@ -592,6 +652,101 @@
       }
     } catch (e) {
       showToast('上传失败: ' + e.message, false);
+    }
+  }
+
+  // ── 重启功能 ───────────────────────────
+  window.restartBot = async function () {
+    const ok = await showConfirm('重启确认', '确定要重启程序吗？所有插件将被重新加载。');
+    if (!ok) return;
+
+    // 显示重启进度面板
+    showRestartProgress();
+
+    try {
+      const resp = await fetch(apiUrl('/api/restart'), { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        showToast('重启指令已发送', true);
+        // 启动 SSE 监听重启进度
+        listenRestartProgress();
+      } else {
+        showToast('重启失败: ' + data.message, false);
+        hideRestartProgress();
+      }
+    } catch (e) {
+      showToast('重启请求失败: ' + e.message, false);
+      hideRestartProgress();
+    }
+  };
+
+  function showRestartProgress() {
+    const panel = document.getElementById('restart-progress');
+    if (panel) {
+      panel.classList.add('show');
+    }
+  }
+
+  function hideRestartProgress() {
+    const panel = document.getElementById('restart-progress');
+    if (panel) {
+      panel.classList.remove('show');
+    }
+  }
+
+  function listenRestartProgress() {
+    const eventSource = new EventSource(apiUrl('/api/restart-progress'));
+
+    eventSource.onmessage = function (event) {
+      try {
+        const progress = JSON.parse(event.data);
+        updateRestartProgress(progress);
+
+        // 重启完成或失败时
+        if (progress.status === 'success' || progress.status === 'error') {
+          eventSource.close();
+          setTimeout(() => {
+            hideRestartProgress();
+            // 刷新页面
+            window.location.reload();
+          }, 2000);
+        }
+      } catch (e) {
+        console.error('解析重启进度失败:', e);
+      }
+    };
+
+    eventSource.onerror = function () {
+      // 连接断开（可能是重启中），等待后刷新
+      eventSource.close();
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    };
+  }
+
+  function updateRestartProgress(progress) {
+    const bar = document.getElementById('restart-progress-bar');
+    const message = document.getElementById('restart-progress-message');
+
+    if (bar && progress.progress !== null && progress.progress !== undefined) {
+      bar.style.width = `${Math.round(progress.progress * 100)}%`;
+
+      if (progress.status === 'error') {
+        bar.classList.add('error');
+      } else if (progress.status === 'success') {
+        bar.classList.add('success');
+      }
+    }
+
+    if (message) {
+      message.textContent = progress.message;
+
+      if (progress.status === 'error') {
+        message.classList.add('error');
+      } else if (progress.status === 'success') {
+        message.classList.add('success');
+      }
     }
   }
 

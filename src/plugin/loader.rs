@@ -7,8 +7,8 @@ use libloading::Library;
 use tracing::{info, error, warn};
 
 use super::handle::PluginHandle;
-use super::manager::PluginInfo;
-use super::bus::{Bus, TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_TASK, TOPIC_SEND};
+use super::manager::{PluginInfo, PluginStats};
+use super::bus::{Bus, TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_REQUEST, TOPIC_TASK, TOPIC_SEND};
 
 /// 插件加载器
 pub struct PluginLoader {
@@ -89,6 +89,7 @@ impl PluginLoader {
                 priority: 0,
                 block_enabled: false,
                 active: has_main,
+                stats: PluginStats::default(),
             };
 
             let handle = if has_main {
@@ -124,7 +125,7 @@ impl PluginLoader {
     /// 为插件在各 topic 上创建 subscriber
     pub(crate) fn create_subscribers(plugin_name: &str) -> HashMap<String, usize> {
         info!("[loader] 为插件 {} 创建 subscriber...", plugin_name);
-        let topics = [TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_TASK, TOPIC_SEND];
+        let topics = [TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_REQUEST, TOPIC_TASK, TOPIC_SEND];
         let mut ids = HashMap::new();
         for topic in &topics {
             info!("[loader] 插件 {} 尝试订阅 topic: {}", plugin_name, topic);
@@ -151,11 +152,13 @@ impl PluginLoader {
         unsafe {
             // 尝试调用 luo9_init_subscribers 传递预创建的 subscriber ID
             // 使用 repr(C) 兼容的裸结构体定义，避免跨 crate 类型匹配问题
+            // 注意：必须与 SDK 的 PluginSubscribers 结构体字段顺序和数量完全一致
             #[repr(C)]
             struct PluginSubscribersRaw {
                 message_sub_id: i32,
                 meta_event_sub_id: i32,
                 notice_sub_id: i32,
+                request_sub_id: i32,
                 task_sub_id: i32,
                 send_sub_id: i32,
             }
@@ -168,11 +171,12 @@ impl PluginLoader {
                         message_sub_id: subscriber_ids.get(TOPIC_MESSAGE).copied().unwrap_or(0) as i32,
                         meta_event_sub_id: subscriber_ids.get(TOPIC_META_EVENT).copied().unwrap_or(0) as i32,
                         notice_sub_id: subscriber_ids.get(TOPIC_NOTICE).copied().unwrap_or(0) as i32,
+                        request_sub_id: subscriber_ids.get(TOPIC_REQUEST).copied().unwrap_or(0) as i32,
                         task_sub_id: subscriber_ids.get(TOPIC_TASK).copied().unwrap_or(0) as i32,
                         send_sub_id: subscriber_ids.get(TOPIC_SEND).copied().unwrap_or(0) as i32,
                     };
-                    info!("[loader] 插件 {} 传递 subscriber 映射: msg={}, notice={}, meta={}, task={}, send={}",
-                        plugin_name, subs.message_sub_id, subs.notice_sub_id, subs.meta_event_sub_id, subs.task_sub_id, subs.send_sub_id);
+                    info!("[loader] 插件 {} 传递 subscriber 映射: msg={}, notice={}, meta={}, request={}, task={}, send={}",
+                        plugin_name, subs.message_sub_id, subs.notice_sub_id, subs.meta_event_sub_id, subs.request_sub_id, subs.task_sub_id, subs.send_sub_id);
                     init_fn(&subs);
                     info!("插件 {} 已初始化 subscriber 映射", plugin_name);
                 }
@@ -256,6 +260,7 @@ pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo,
             priority: 0,
             block_enabled: false,
             active: has_main,
+            stats: PluginStats::default(),
         };
 
         let handle = if has_main {

@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
+use crate::request::Request;
 
 /// 插件数据类型枚举
 /// 统一所有可能传递给插件的数据类型
@@ -16,6 +17,8 @@ pub enum PluginData {
     MetaEvent(MetaEvent),
     /// 通知类型
     Notice(Notice),
+    /// 请求类型
+    Request(Request),
 }
 
 impl PluginData {
@@ -25,9 +28,10 @@ impl PluginData {
             PluginData::Message(_) => "Message",
             PluginData::MetaEvent(_) => "MetaEvent",
             PluginData::Notice(_) => "Notice",
+            PluginData::Request(_) => "Request",
         }
     }
-    
+
     /// 尝试转换为 Message 类型
     pub fn as_message(&self) -> Option<&Message> {
         match self {
@@ -35,7 +39,7 @@ impl PluginData {
             _ => None,
         }
     }
-    
+
     /// 尝试转换为 MetaEvent 类型
     pub fn as_meta_event(&self) -> Option<&MetaEvent> {
         match self {
@@ -43,11 +47,19 @@ impl PluginData {
             _ => None,
         }
     }
-    
+
     /// 尝试转换为 Notice 类型
     pub fn as_notice(&self) -> Option<&Notice> {
         match self {
             PluginData::Notice(notice) => Some(notice),
+            _ => None,
+        }
+    }
+
+    /// 尝试转换为 Request 类型
+    pub fn as_request(&self) -> Option<&Request> {
+        match self {
+            PluginData::Request(request) => Some(request),
             _ => None,
         }
     }

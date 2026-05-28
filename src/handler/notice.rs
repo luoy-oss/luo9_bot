@@ -1,47 +1,66 @@
-// use crate::sub_type::SubType;
 use crate::plugin::dispatch_notice;
-
 use crate::error::Result;
-use crate::error::LNErr;
-
-use crate::notice::Notice;
-use crate::notice::NoticeType;
-
-use tracing::warn;
-
+use crate::notice::{Notice, NoticeType};
+use tracing::{debug, warn};
 
 #[cfg(feature = "napcat")]
 pub fn handle_notice(notice: Notice) -> Result<()> {
-    println!("notice: {:?}", notice);
+    debug!("收到通知: {:?}", notice);
+
     match notice.notice_type {
-        // NoticeType::Notify => {
-        //     match notice.sub_type {
-        //         SubType::InputStatus => {
-        //             #[cfg(feature = "bot_debug")]
-        //             info!("输入状态通知: {:?}", notice.status);
-        //         },
-        //         _ => {
-        //             warn!("其他通知子类型: {:?}", notice.sub_type);
-        //             return Err(LNErr::UnknownNoticeType);
-        //         }
-        //     }
-        // },
-        NoticeType::Notify => {
+        // 好友相关
+        NoticeType::FriendAdd |
+        NoticeType::FriendRecall |
+        NoticeType::FriendPoke => {
             dispatch_notice(notice);
         },
-        NoticeType::GroupIncrease => {
-            dispatch_notice(notice);
-        },
+
+        // 群管理相关
+        NoticeType::GroupAdmin |
+        NoticeType::GroupBan |
+        NoticeType::GroupIncrease |
         NoticeType::GroupDecrease => {
             dispatch_notice(notice);
         },
-        NoticeType::FriendAdd => {
+
+        // 群消息相关
+        NoticeType::GroupCard |
+        NoticeType::GroupRecall |
+        NoticeType::GroupUpload => {
             dispatch_notice(notice);
         },
-        _ => {
-            warn!("不支持的通知类型: {:?}", notice.notice_type);
-            return Err(LNErr::UnknownNoticeType);
-        }
+
+        // 群荣誉和头衔
+        NoticeType::GroupTitle |
+        NoticeType::Honor => {
+            dispatch_notice(notice);
+        },
+
+        // 精华消息
+        NoticeType::Essence => {
+            dispatch_notice(notice);
+        },
+
+        // 戳一戳和互动
+        NoticeType::Poke |
+        NoticeType::LuckyKing => {
+            dispatch_notice(notice);
+        },
+
+        // 表情回应（NapCat 扩展）
+        NoticeType::GroupMsgEmojiLike => {
+            dispatch_notice(notice);
+        },
+
+        // 通用通知
+        NoticeType::Notify => {
+            dispatch_notice(notice);
+        },
+
+        NoticeType::Unknown => {
+            warn!("未知通知类型: {:?}", notice);
+            dispatch_notice(notice);
+        },
     };
 
     Ok(())

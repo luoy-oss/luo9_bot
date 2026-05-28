@@ -1,6 +1,6 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0-beta.7"
+version = "0.1.0-beta.8"
 edition = "2024"
 authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人"
@@ -13,7 +13,7 @@ plugins = []  # 插件系统支持
 default = ["napcat"]
 
 [dependencies]
-luo9_sdk = "0.6.0"
+luo9_sdk = "0.7.1"
 # luo9_sdk = { path = "H:\\github\\luo9_bot\\sdk\\rust" }
 
 # 异步运行时

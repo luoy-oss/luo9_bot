@@ -161,6 +161,8 @@ pub struct WebuiState {
     pub mirror_cache: Arc<RwLock<Option<MirrorCache>>>,
     /// 用户手动选择的镜像（None 表示自动选择最优）
     pub user_selected_mirror: Arc<RwLock<Option<String>>>,
+    /// WebSocket 连接状态
+    pub ws_connected: Arc<RwLock<bool>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -187,6 +189,8 @@ struct StatusResponse {
     plugin_dir: String,
     bot_version: String,
     webui_version: String,
+    /// WebSocket 连接状态
+    ws_connected: bool,
 }
 
 #[derive(Deserialize)]
@@ -290,7 +294,7 @@ fn generate_token() -> String {
     format!("{:016x}", timestamp.wrapping_mul(pid as u128))
 }
 
-pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String) {
+pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String, ws_connected: bool) {
     // token 生成逻辑：配置为空时随机生成
     let token = if config_token.is_empty() {
         let generated = generate_token();
@@ -318,6 +322,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         progress_tx,
         mirror_cache: mirror_cache.clone(),
         user_selected_mirror: user_selected_mirror.clone(),
+        ws_connected: Arc::new(RwLock::new(ws_connected)),
     });
 
     // 启动镜像健康检查任务（后台预热）
@@ -345,6 +350,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     let api_routes = Router::new()
         .route("/api/status", get(api_status))
         .route("/api/plugins", get(api_plugins))
+        .route("/api/plugins/stats", get(api_plugin_stats))
         .route("/api/plugins/upload", post(api_plugin_upload))
         .route("/api/plugins/{name}", delete(api_plugin_delete))
         .route("/api/plugins/{name}/enable", post(api_plugin_enable))
@@ -361,6 +367,8 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/download-progress", get(api_download_progress))
         .route("/api/mirrors", get(api_mirrors))
         .route("/api/mirrors/select", put(api_mirror_select))
+        .route("/api/restart", post(api_restart))
+        .route("/api/restart-progress", get(api_restart_progress))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
@@ -676,6 +684,7 @@ async fn api_mirror_select(
 
 async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
     let plugins = scan_plugins(&state.plugin_dir);
+    let ws_connected = *state.ws_connected.read().await;
     let resp = StatusResponse {
         start_timestamp: state.start_timestamp,
         plugin_count: plugins.len(),
@@ -683,6 +692,7 @@ async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
         plugin_dir: state.plugin_dir.clone(),
         bot_version: env!("CARGO_PKG_VERSION").to_string(),
         webui_version: WEBUI_VERSION.to_string(),
+        ws_connected,
     };
     Json(resp)
 }
@@ -702,6 +712,13 @@ async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
     }
 
     Json(plugins)
+}
+
+/// 获取插件统计信息
+async fn api_plugin_stats() -> impl IntoResponse {
+    let manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
+    let stats = manager.get_all_stats();
+    Json(stats)
 }
 
 /// 返回当前使用的配置文件路径
@@ -1305,6 +1322,60 @@ async fn api_config_raw_put(Json(req): Json<RawConfigUpdate>) -> impl IntoRespon
 
 /// 下载进度 SSE 端点
 async fn api_download_progress(
+    State(state): State<Arc<WebuiState>>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let mut rx = state.progress_tx.subscribe();
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(progress) => {
+                    let data = serde_json::to_string(&progress).unwrap_or_default();
+                    yield Ok(Event::default().data(data));
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("ping"),
+    )
+}
+
+// ========== 重启功能 ==========
+
+/// 重启进度事件
+#[derive(Debug, Clone, Serialize)]
+pub struct RestartProgress {
+    pub step: String,
+    pub message: String,
+    pub progress: f32, // 0.0 - 1.0
+}
+
+/// 重启 API 端点
+async fn api_restart(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
+    info!("收到重启请求");
+
+    // 发送重启进度
+    let _ = state.progress_tx.send(DownloadProgress {
+        plugin_name: "system".to_string(),
+        status: "restarting".to_string(),
+        message: "正在准备重启...".to_string(),
+        progress: Some(0.0),
+    });
+
+    // 发送重启信号
+    crate::RESTART_TX.send(true).ok();
+
+    json_ok("重启指令已发送")
+}
+
+/// 重启进度 SSE 端点（复用下载进度通道）
+async fn api_restart_progress(
     State(state): State<Arc<WebuiState>>,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
     let mut rx = state.progress_tx.subscribe();

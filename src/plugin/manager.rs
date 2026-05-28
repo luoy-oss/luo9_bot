@@ -3,10 +3,32 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 use tracing::{info, warn, error};
+use serde::Serialize;
 
 use super::handle::PluginHandle;
 use super::loader::load_single_plugin;
 use super::dispatch::update_dispatch_list;
+
+/// 插件性能统计
+#[derive(Debug, Clone, Default)]
+pub struct PluginStats {
+    /// 消息处理次数
+    pub message_count: u64,
+    /// 通知处理次数
+    pub notice_count: u64,
+    /// 元事件处理次数
+    pub meta_event_count: u64,
+    /// 请求处理次数
+    pub request_count: u64,
+    /// 总响应时间（微秒）
+    pub total_response_time_us: u64,
+    /// 最后一次响应时间（微秒）
+    pub last_response_time_us: u64,
+    /// 错误次数
+    pub error_count: u64,
+    /// 最后活跃时间
+    pub last_active: Option<std::time::Instant>,
+}
 
 /// 插件信息（用于 API 返回和注册）
 #[derive(Debug, Clone)]
@@ -19,6 +41,7 @@ pub struct PluginInfo {
     pub priority: i32,
     pub block_enabled: bool,
     pub active: bool,
+    pub stats: PluginStats,
 }
 
 /// 优先级分发条目
@@ -30,6 +53,7 @@ pub struct DispatchEntry {
     pub message_sub_id: Option<usize>,
     pub notice_sub_id: Option<usize>,
     pub meta_event_sub_id: Option<usize>,
+    pub request_sub_id: Option<usize>,
 }
 
 /// 插件管理器
@@ -250,6 +274,7 @@ impl PluginManager {
                 message_sub_id: h.subscriber_ids.get("luo9_message").copied(),
                 notice_sub_id: h.subscriber_ids.get("luo9_notice").copied(),
                 meta_event_sub_id: h.subscriber_ids.get("luo9_meta_event").copied(),
+                request_sub_id: h.subscriber_ids.get("luo9_request").copied(),
             })
             .collect();
 
@@ -289,6 +314,89 @@ impl PluginManager {
         let active = self.handles.values().filter(|h| h.active).count();
         format!("插件统计: 总数={}, 活跃={}", self.plugin_infos.len(), active)
     }
+
+    /// 更新插件消息统计
+    pub fn update_message_stats(&mut self, name: &str, response_time_us: u64) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.message_count += 1;
+            info.stats.total_response_time_us += response_time_us;
+            info.stats.last_response_time_us = response_time_us;
+            info.stats.last_active = Some(std::time::Instant::now());
+        }
+    }
+
+    /// 更新插件通知统计
+    pub fn update_notice_stats(&mut self, name: &str, response_time_us: u64) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.notice_count += 1;
+            info.stats.total_response_time_us += response_time_us;
+            info.stats.last_response_time_us = response_time_us;
+            info.stats.last_active = Some(std::time::Instant::now());
+        }
+    }
+
+    /// 更新插件元事件统计
+    pub fn update_meta_event_stats(&mut self, name: &str, response_time_us: u64) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.meta_event_count += 1;
+            info.stats.total_response_time_us += response_time_us;
+            info.stats.last_response_time_us = response_time_us;
+            info.stats.last_active = Some(std::time::Instant::now());
+        }
+    }
+
+    /// 更新插件错误统计
+    pub fn update_error_stats(&mut self, name: &str) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.error_count += 1;
+        }
+    }
+
+    /// 更新插件请求统计
+    pub fn update_request_stats(&mut self, name: &str, response_time_us: u64) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.request_count += 1;
+            info.stats.total_response_time_us += response_time_us;
+            info.stats.last_response_time_us = response_time_us;
+            info.stats.last_active = Some(std::time::Instant::now());
+        }
+    }
+
+    /// 获取所有插件统计信息
+    pub fn get_all_stats(&self) -> Vec<PluginStatsInfo> {
+        self.plugin_infos.iter().map(|p| {
+            let total_count = p.stats.message_count + p.stats.notice_count + p.stats.meta_event_count + p.stats.request_count;
+            PluginStatsInfo {
+                name: p.name.clone(),
+                active: p.active,
+                message_count: p.stats.message_count,
+                notice_count: p.stats.notice_count,
+                meta_event_count: p.stats.meta_event_count,
+                request_count: p.stats.request_count,
+                avg_response_time_ms: if total_count > 0 {
+                    p.stats.total_response_time_us as f64 / total_count as f64 / 1000.0
+                } else { 0.0 },
+                last_response_time_ms: p.stats.last_response_time_us as f64 / 1000.0,
+                error_count: p.stats.error_count,
+                last_active_secs: p.stats.last_active.map(|t| t.elapsed().as_secs()),
+            }
+        }).collect()
+    }
+}
+
+/// 插件统计信息（用于 API 返回）
+#[derive(Debug, Clone, Serialize)]
+pub struct PluginStatsInfo {
+    pub name: String,
+    pub active: bool,
+    pub message_count: u64,
+    pub notice_count: u64,
+    pub meta_event_count: u64,
+    pub request_count: u64,
+    pub avg_response_time_ms: f64,
+    pub last_response_time_ms: f64,
+    pub error_count: u64,
+    pub last_active_secs: Option<u64>,
 }
 
 lazy_static::lazy_static! {

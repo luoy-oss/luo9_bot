@@ -2,8 +2,14 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>来看洛玖啦</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#9b8ce8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>洛玖控制台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,6 +20,7 @@
   <div class="header-status">
     <span class="status-dot"></span>
     <span id="header-status-text">运行中</span>
+    <button class="btn btn-restart" onclick="restartBot()" title="重启程序">重启</button>
   </div>
 </header>
 
@@ -27,15 +34,25 @@
       <div class="stat-value" id="stat-uptime">--</div>
       <div class="stat-label">运行时间</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-icon">🧩</div>
-      <div class="stat-value" id="stat-plugins">--</div>
-      <div class="stat-label">已加载插件</div>
+    <div class="stat-card stat-chart">
+      <div class="chart-container">
+        <svg class="donut-chart" viewBox="0 0 36 36">
+          <circle class="donut-bg" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--border)" stroke-width="3.5"/>
+          <circle class="donut-segment" id="donut-active" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--mint)" stroke-width="3.5" stroke-dasharray="0 100" stroke-dashoffset="0"/>
+        </svg>
+        <div class="chart-center">
+          <span class="chart-value" id="active-plugins">0</span>
+          <span class="chart-label">活跃</span>
+        </div>
+      </div>
+      <div class="stat-label">插件状态</div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">📁</div>
-      <div class="stat-value" id="stat-dir" style="font-size:0.8em;word-break:break-all;">--</div>
-      <div class="stat-label">插件目录</div>
+      <div class="stat-icon">🔌</div>
+      <div class="stat-value">
+        <span class="ws-status" id="ws-status">检测中</span>
+      </div>
+      <div class="stat-label">Napcat 连接</div>
     </div>
   </div>
 
@@ -67,6 +84,18 @@
         <input type="file" id="upload-input" accept=".dll,.so" multiple hidden>
       </div>
     </div>
+  </div>
+
+  <!-- ═══ Restart Progress Panel ═══ -->
+  <div class="restart-progress" id="restart-progress">
+    <div class="restart-progress-header">
+      <span class="restart-progress-icon">🔄</span>
+      <span class="restart-progress-title">正在重启</span>
+    </div>
+    <div class="restart-progress-bar-container">
+      <div class="restart-progress-bar" id="restart-progress-bar"></div>
+    </div>
+    <div class="restart-progress-message" id="restart-progress-message">准备中...</div>
   </div>
 
   <!-- Tab: 插件商店 -->

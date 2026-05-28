@@ -1,12 +1,13 @@
 // src/plugin/dispatch.rs
 use std::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use super::bus::Bus;
-use super::manager::DispatchEntry;
+use super::manager::{DispatchEntry, GLOBAL_PLUGIN_MANAGER};
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
+use crate::request::Request;
 use super::data::PluginData;
 
 /// 优先级分发列表（无锁快速路径读取）
@@ -32,7 +33,11 @@ pub fn update_dispatch_list(entries: Vec<DispatchEntry>) {
     }
 }
 
-/// 优先级分发消息（使用 publish_to 定向推送）
+/// 优先级分发消息（使用 publish_to 定向推送，支持阻断）
+///
+/// 按优先级降序遍历插件：
+/// - 使用 publish_to 定向推送到插件的 subscriber
+/// - 如果插件启用了 block_enabled，则停止后续分发
 pub fn priority_dispatch_message(msg: Message) {
     let payload = match serde_json::to_string(&PluginData::Message(msg)) {
         Ok(json) => json,
@@ -41,8 +46,6 @@ pub fn priority_dispatch_message(msg: Message) {
             return;
         }
     };
-
-    // debug!("payload: {}", payload);
 
     let list = match DISPATCH_LIST.read() {
         Ok(list) => list,
@@ -53,23 +56,38 @@ pub fn priority_dispatch_message(msg: Message) {
     };
 
     if list.is_empty() {
-        error!("[dispatch] 分发列表为空！消息被丢弃");
+        info!("[dispatch] 分发列表为空，消息被丢弃");
         return;
     }
 
+    // 按优先级降序遍历插件（list 已在 update_dispatch_list 中排序）
     for entry in list.iter() {
         let Some(sub_id) = entry.message_sub_id else {
             info!("[dispatch] 跳过 {} (未订阅 luo9_message)", entry.name);
             continue;
         };
+
+        let start = std::time::Instant::now();
         match Bus::topic(super::bus::TOPIC_MESSAGE).publish_to(&payload, &[sub_id]) {
             Ok(()) => {
-                info!("[dispatch] 已分发消息到 {} (sub_id={}, priority={})", entry.name, sub_id, entry.priority);
+                let elapsed = start.elapsed().as_micros() as u64;
+                info!("[dispatch] 已分发消息到 {} (sub_id={}, priority={}, 耗时={}μs)",
+                    entry.name, sub_id, entry.priority, elapsed);
+
+                // 更新统计
+                if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                    manager.update_message_stats(&entry.name, elapsed);
+                }
             }
             Err(e) => {
                 error!("[dispatch] 定向分发消息到 {} 失败: {:?}", entry.name, e);
+                if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                    manager.update_error_stats(&entry.name);
+                }
             }
         }
+
+        // 如果该插件启用了阻断，停止后续分发
         if entry.block_enabled {
             info!("[dispatch] 插件 {} 启用了阻断，停止后续分发", entry.name);
             break;
@@ -77,7 +95,7 @@ pub fn priority_dispatch_message(msg: Message) {
     }
 }
 
-/// 优先级分发通知
+/// 优先级分发通知（使用 publish_to 定向推送，支持阻断）
 pub fn priority_dispatch_notice(notice: Notice) {
     let payload = match serde_json::to_string(&PluginData::Notice(notice)) {
         Ok(json) => json,
@@ -101,16 +119,28 @@ pub fn priority_dispatch_notice(notice: Notice) {
 
     for entry in list.iter() {
         let Some(sub_id) = entry.notice_sub_id else { continue };
+
+        let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_NOTICE).publish_to(&payload, &[sub_id]) {
-            error!("定向分发通知到 {} 失败: {:?}", entry.name, e);
+            error!("[dispatch] 定向分发通知到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_notice_stats(&entry.name, elapsed);
+            }
         }
+
         if entry.block_enabled {
+            info!("[dispatch] 插件 {} 启用了阻断，停止后续分发", entry.name);
             break;
         }
     }
 }
 
-/// 优先级分发元事件
+/// 优先级分发元事件（使用 publish_to 定向推送，支持阻断）
 pub fn priority_dispatch_meta_event(event: MetaEvent) {
     let payload = match serde_json::to_string(&PluginData::MetaEvent(event)) {
         Ok(json) => json,
@@ -134,10 +164,67 @@ pub fn priority_dispatch_meta_event(event: MetaEvent) {
 
     for entry in list.iter() {
         let Some(sub_id) = entry.meta_event_sub_id else { continue };
+
+        let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_META_EVENT).publish_to(&payload, &[sub_id]) {
-            error!("定向分发元事件到 {} 失败: {:?}", entry.name, e);
+            error!("[dispatch] 定向分发元事件到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_meta_event_stats(&entry.name, elapsed);
+            }
         }
+
         if entry.block_enabled {
+            info!("[dispatch] 插件 {} 启用了阻断，停止后续分发", entry.name);
+            break;
+        }
+    }
+}
+
+/// 优先级分发请求事件（使用 publish_to 定向推送，支持阻断）
+pub fn priority_dispatch_request(request: Request) {
+    let payload = match serde_json::to_string(&PluginData::Request(request)) {
+        Ok(json) => json,
+        Err(e) => {
+            error!("序列化请求失败: {}", e);
+            return;
+        }
+    };
+
+    let list = match DISPATCH_LIST.read() {
+        Ok(list) => list,
+        Err(e) => {
+            error!("读取分发列表失败: {}", e);
+            return;
+        }
+    };
+
+    if list.is_empty() {
+        return;
+    }
+
+    for entry in list.iter() {
+        let Some(sub_id) = entry.request_sub_id else { continue };
+
+        let start = std::time::Instant::now();
+        if let Err(e) = Bus::topic(super::bus::TOPIC_REQUEST).publish_to(&payload, &[sub_id]) {
+            error!("[dispatch] 定向分发请求到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_request_stats(&entry.name, elapsed);
+            }
+        }
+
+        if entry.block_enabled {
+            info!("[dispatch] 插件 {} 启用了阻断，停止后续分发", entry.name);
             break;
         }
     }

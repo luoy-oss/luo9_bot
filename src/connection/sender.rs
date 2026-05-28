@@ -22,42 +22,42 @@ impl Sender {
         let host = host.into();
         let token = token.into();
         let url = format!("ws://{}:{}", host, port);
-        
+
         info!("连接 Napcat API: {} timeout_seconds： {} token: {}", url, timeout_seconds, token);
         let mut request = url.clone().into_client_request()?;
-        
+
         // 建立连接
         // 添加Header 添加参数 Authorization，其值为在 Bearer 之后拼接 Token
-        request.headers_mut().insert("Authorization", 
+        request.headers_mut().insert("Authorization",
         HeaderValue::from_str(&format!("Bearer {}", token))
             .map_err(|e| LNErr::InvalidHeaderValue(format!("Authorization 头值错误: {}", e)))?);
-        
+
         let (ws_stream, _) = connect_async(request).await?;
         let (write, read) = ws_stream.split();
-        
+
          Ok(Self {
             write: Arc::new(Mutex::new(write)),
             read: Arc::new(Mutex::new(read)),
             timeout_seconds,
         })
     }
-    
+
     /// 发送 API 调用
     pub async fn send_api(&self, action: &str, params: Value) -> Result<Value> {
         // info!("action:{}\tparams:{}", action, params);
-        
+
         let request: Value = json!({
             "action": action,
             "params": params,
             "echo": format!("{}_{}", action, chrono::Utc::now().timestamp())
         });
-        
+
         let request_str = serde_json::to_string(&request)?;
-        
+
         // 发送
         let mut write = self.write.lock().await;
         write.send(Message::Text(request_str.into())).await?;
-        
+
         let mut read = self.read.lock().await;
 
         // 等待响应（带超时）
@@ -90,7 +90,7 @@ impl Sender {
             }
         }
     }
-    
+
     /// 获取登录信息（测试连接用）
     pub async fn get_login_info(&self) -> Result<Value> {
         self.send_api("get_login_info", json!({})).await
