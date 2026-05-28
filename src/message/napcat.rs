@@ -32,14 +32,6 @@ pub struct Anonymous {
     pub flag: String,
 }
 
-/// 消息段类型（用于结构化消息）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageSegment {
-    #[serde(rename = "type")]
-    pub seg_type: String,
-    pub data: Value,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum MsgType {
     Private,
@@ -58,6 +50,8 @@ impl Serialize for MsgType {
 }
 
 /// 完整的 OneBot v11 消息结构
+///
+/// `message` 字段为纯文本消息（raw_message），保持与 SDK 的兼容性。
 #[derive(Debug, Serialize, Clone)]
 pub struct Message {
     pub time: u64,
@@ -71,8 +65,8 @@ pub struct Message {
     pub real_seq: Option<String>,
     pub user_id: u64,
     pub group_id: Option<u64>,
-    pub message: Vec<MessageSegment>,
-    pub raw_message: String,
+    /// 纯文本消息内容（raw_message）
+    pub message: String,
     pub font: u32,
     pub sender: Sender,
     pub anonymous: Option<Anonymous>,
@@ -111,23 +105,6 @@ impl Message {
 
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
-
-        // 解析消息段数组
-        let message = match data.get("message") {
-            Some(Value::Array(arr)) => {
-                arr.iter()
-                    .filter_map(|seg| serde_json::from_value::<MessageSegment>(seg.clone()).ok())
-                    .collect()
-            }
-            Some(Value::String(s)) => {
-                // 兼容字符串格式的消息
-                vec![MessageSegment {
-                    seg_type: "text".to_string(),
-                    data: serde_json::json!({"text": s}),
-                }]
-            }
-            _ => vec![],
-        };
 
         let raw_message = data.get("raw_message")
             .and_then(|v| v.as_str())
@@ -174,8 +151,7 @@ impl Message {
             real_seq,
             user_id,
             group_id,
-            message,
-            raw_message,
+            message: raw_message,  // 使用 raw_message 作为 message 字段
             font,
             sender,
             anonymous,
@@ -183,8 +159,8 @@ impl Message {
         }
     }
 
-    /// 获取纯文本消息内容（兼容旧接口）
+    /// 获取纯文本消息内容
     pub fn get_text(&self) -> &str {
-        &self.raw_message
+        &self.message
     }
 }
