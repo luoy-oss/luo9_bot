@@ -132,6 +132,27 @@
         const webui = data.webui_version || '?';
         verEl.textContent = `Bot v${bot} · WebUI v${webui}`;
       }
+
+      // 更新 WebSocket 连接状态
+      const wsStatusEl = document.getElementById('ws-status');
+      const headerStatusText = document.getElementById('header-status-text');
+      if (data.ws_connected) {
+        if (wsStatusEl) {
+          wsStatusEl.className = 'ws-status ws-connected';
+          wsStatusEl.textContent = 'WS 已连接';
+        }
+        if (headerStatusText) {
+          headerStatusText.textContent = '运行中';
+        }
+      } else {
+        if (wsStatusEl) {
+          wsStatusEl.className = 'ws-status ws-disconnected';
+          wsStatusEl.textContent = 'WS 未连接';
+        }
+        if (headerStatusText) {
+          headerStatusText.textContent = 'WS 未连接';
+        }
+      }
     } catch (e) {
       console.error('获取状态失败:', e);
     }

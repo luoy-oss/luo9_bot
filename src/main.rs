@@ -13,9 +13,10 @@ async fn main() -> Result<()> {
         // 启动 WebUI
         let webui_cfg = ctx.config.webui.clone();
         let plugin_dir = ctx.config.plugins.plugin_dir.clone();
+        let ws_connected = ctx.tx.is_some();
         if webui_cfg.enabled {
             tokio::spawn(async move {
-                luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token).await;
+                luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token, ws_connected).await;
             });
         }
 

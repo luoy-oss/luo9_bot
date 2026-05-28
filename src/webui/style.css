@@ -1406,6 +1406,55 @@ body {
   font-weight: 500;
 }
 
+/* ── WebSocket Status ─────────────────── */
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-base);
+}
+
+.ws-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ws-connected {
+  background: var(--success-bg);
+  color: var(--mint-dark);
+}
+
+.ws-connected::before {
+  box-shadow: 0 0 6px currentColor;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ws-disconnected {
+  background: var(--warning-bg);
+  color: #d97706;
+}
+
+.ws-disconnected::before {
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* ── Responsive ────────────────────────── */
 @media (max-width: 768px) {
   .stats {

@@ -161,6 +161,8 @@ pub struct WebuiState {
     pub mirror_cache: Arc<RwLock<Option<MirrorCache>>>,
     /// 用户手动选择的镜像（None 表示自动选择最优）
     pub user_selected_mirror: Arc<RwLock<Option<String>>>,
+    /// WebSocket 连接状态
+    pub ws_connected: Arc<RwLock<bool>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -187,6 +189,8 @@ struct StatusResponse {
     plugin_dir: String,
     bot_version: String,
     webui_version: String,
+    /// WebSocket 连接状态
+    ws_connected: bool,
 }
 
 #[derive(Deserialize)]
@@ -290,7 +294,7 @@ fn generate_token() -> String {
     format!("{:016x}", timestamp.wrapping_mul(pid as u128))
 }
 
-pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String) {
+pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String, ws_connected: bool) {
     // token 生成逻辑：配置为空时随机生成
     let token = if config_token.is_empty() {
         let generated = generate_token();
@@ -318,6 +322,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         progress_tx,
         mirror_cache: mirror_cache.clone(),
         user_selected_mirror: user_selected_mirror.clone(),
+        ws_connected: Arc::new(RwLock::new(ws_connected)),
     });
 
     // 启动镜像健康检查任务（后台预热）
@@ -679,6 +684,7 @@ async fn api_mirror_select(
 
 async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
     let plugins = scan_plugins(&state.plugin_dir);
+    let ws_connected = *state.ws_connected.read().await;
     let resp = StatusResponse {
         start_timestamp: state.start_timestamp,
         plugin_count: plugins.len(),
@@ -686,6 +692,7 @@ async fn api_status(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
         plugin_dir: state.plugin_dir.clone(),
         bot_version: env!("CARGO_PKG_VERSION").to_string(),
         webui_version: WEBUI_VERSION.to_string(),
+        ws_connected,
     };
     Json(resp)
 }
