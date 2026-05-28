@@ -15,7 +15,7 @@ pub fn handle(data: Value) -> Result<()> {
         .and_then(|v| serde_json::from_value::<PostType>(v.clone()).ok())
         .ok_or(LNErr::EventParseError("Invalid post_type".to_string()))?;
 
-    debug!("收到事件: {:?}", post_type);
+    // debug!("收到事件: {:?}", post_type);
 
     match post_type {
         PostType::MetaEvent => {
