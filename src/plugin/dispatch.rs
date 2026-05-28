@@ -1,12 +1,13 @@
 // src/plugin/dispatch.rs
 use std::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use super::bus::Bus;
 use super::manager::{DispatchEntry, GLOBAL_PLUGIN_MANAGER};
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
+use crate::request::Request;
 use super::data::PluginData;
 
 /// 优先级分发列表（无锁快速路径读取）
@@ -166,6 +167,49 @@ pub fn priority_dispatch_meta_event(event: MetaEvent) {
             let elapsed = start.elapsed().as_micros() as u64;
             if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
                 manager.update_meta_event_stats(&entry.name, elapsed);
+            }
+        }
+        if entry.block_enabled {
+            break;
+        }
+    }
+}
+
+/// 优先级分发请求事件
+pub fn priority_dispatch_request(request: Request) {
+    let payload = match serde_json::to_string(&PluginData::Request(request)) {
+        Ok(json) => json,
+        Err(e) => {
+            error!("序列化请求失败: {}", e);
+            return;
+        }
+    };
+
+    let list = match DISPATCH_LIST.read() {
+        Ok(list) => list,
+        Err(e) => {
+            error!("读取分发列表失败: {}", e);
+            return;
+        }
+    };
+
+    if list.is_empty() {
+        return;
+    }
+
+    for entry in list.iter() {
+        let Some(sub_id) = entry.request_sub_id else { continue };
+
+        let start = std::time::Instant::now();
+        if let Err(e) = Bus::topic(super::bus::TOPIC_REQUEST).publish_to(&payload, &[sub_id]) {
+            error!("定向分发请求到 {} 失败: {:?}", entry.name, e);
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_error_stats(&entry.name);
+            }
+        } else {
+            let elapsed = start.elapsed().as_micros() as u64;
+            if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
+                manager.update_request_stats(&entry.name, elapsed);
             }
         }
         if entry.block_enabled {

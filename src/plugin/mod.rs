@@ -18,12 +18,19 @@ pub use manager::{
     get_manager_stats
 };
 pub use loader::PluginLoader;
-pub use dispatch::{update_dispatch_list, priority_dispatch_message, priority_dispatch_notice, priority_dispatch_meta_event};
+pub use dispatch::{
+    update_dispatch_list,
+    priority_dispatch_message,
+    priority_dispatch_notice,
+    priority_dispatch_meta_event,
+    priority_dispatch_request,
+};
 
 use tracing::{error, info};
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
+use crate::request::Request;
 
 /// 初始化插件系统
 pub async fn initialize(plugins_dir: &str, config_entries: &[crate::config::PluginEntry]) -> Result<(), Box<dyn std::error::Error>> {
@@ -75,6 +82,11 @@ pub fn dispatch_meta_event(event: MetaEvent) {
 /// 分发通知（使用优先级分发）
 pub fn dispatch_notice(notice: Notice) {
     priority_dispatch_notice(notice);
+}
+
+/// 分发请求（使用优先级分发）
+pub fn dispatch_request(request: Request) {
+    priority_dispatch_request(request);
 }
 
 /// 启用插件（运行时热加载）

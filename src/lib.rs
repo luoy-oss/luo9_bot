@@ -11,6 +11,7 @@ pub mod handler;
 pub mod event;
 pub mod message;
 pub mod notice;
+pub mod request;
 
 pub mod plugin;
 pub mod sub_type;

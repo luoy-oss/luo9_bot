@@ -10,6 +10,7 @@ use super::data::PluginData;
 pub const TOPIC_MESSAGE: &str = "luo9_message";
 pub const TOPIC_META_EVENT: &str = "luo9_meta_event";
 pub const TOPIC_NOTICE: &str = "luo9_notice";
+pub const TOPIC_REQUEST: &str = "luo9_request";
 pub const TOPIC_TASK_MISO: &str = "luo9_task_miso";
 pub const TOPIC_TASK: &str = "luo9_task";
 pub const TOPIC_SEND: &str = "luo9_send";
@@ -21,6 +22,7 @@ pub fn publish_data(data: &PluginData) {
         PluginData::Message(_) => TOPIC_MESSAGE,
         PluginData::MetaEvent(_) => TOPIC_META_EVENT,
         PluginData::Notice(_) => TOPIC_NOTICE,
+        PluginData::Request(_) => TOPIC_REQUEST,
     };
 
     let payload = match serde_json::to_string(data) {

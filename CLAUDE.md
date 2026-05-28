@@ -56,7 +56,7 @@ Napcat ──WebSocket──> Receiver (server :27001)
 3. **总线接收器使用 `spawn_blocking` + `wait_pop`**：避免阻塞 tokio worker 线程，同时不用轮询（无 POLL_INTERVAL）。
 4. **无界队列**：Bus 不丢消息，`Bus::init()` 无容量参数。
 5. **Per-topic 并发**：Bus 内部使用 `RwLock<HashMap>` + per-topic `Mutex` + per-topic `Condvar`，不同 topic 的 publish/pop 互不阻塞，避免 thundering herd。
-6. **`PluginData` 统一序列化格式**：`{"Message": {...}}` / `{"MetaEvent": {...}}` / `{"Notice": {...}}`，SDK 端通过 `BusPayload::parse()` 反序列化。
+6. **`PluginData` 统一序列化格式**：`{"Message": {...}}` / `{"MetaEvent": {...}}` / `{"Notice": {...}}` / `{"Request": {...}}`，SDK 端通过 `BusPayload::parse()` 反序列化。
 7. **轻量 cron 调度器**：手写 6 字段解析器（无外部 cron crate），支持 `* ? - , / L W #` 及月/周名称，`OnceLock<UnboundedSender>` + `tokio::select!`（mpsc recv + 1s interval），调度器运行在独立 tokio task 中。
 8. **优先级定向分发 + 消息阻断**：宿主通过 `Bus::publish_to()` 向指定 subscriber 定向推送消息（而非广播），按优先级降序遍历插件，若高优先级插件启用 `block_enabled` 则停止分发。**插件代码零修改**——SDK 内部透明使用预分配的 subscriber_id。
 9. **Sentinel 机制实现热重载**：`unsubscribe()` 将 subscriber 标记为 dead 并唤醒阻塞线程，`wait_pop()` 识别到哨兵 `__luo9_unsubscribed__` 后返回 `Err(BusError::Unsubscribed)`，插件循环自然退出，线程结束，`Arc<Library>` 释放后 `dlclose` 执行。
@@ -68,6 +68,7 @@ Napcat ──WebSocket──> Receiver (server :27001)
 | `luo9_message` | Host → Plugin | QQ 消息（私聊/群聊） |
 | `luo9_meta_event` | Host → Plugin | 元事件（心跳/生命周期） |
 | `luo9_notice` | Host → Plugin | 通知事件（好友/群变动等） |
+| `luo9_request` | Host → Plugin | 请求事件（好友请求/群请求） |
 | `luo9_task` | Plugin ↔ Host | 定时任务请求/事件 |
 | `luo9_send` | Plugin → Host | 消息发送请求 |
 
@@ -123,18 +124,20 @@ src/
 ├── lib.rs               # LNContext { config, rx, tx }，initialize() / run()
 ├── config.rs            # LNConfig，从 config/default.toml 加载
 ├── error.rs             # LNErr (thiserror)，crate 级 Result<T> 别名
-├── sub_type.rs          # SubType 枚举（24 种 OneBot 子类型），手动 serde 实现
+├── sub_type.rs          # SubType 枚举（35+ 种 OneBot 子类型），手动 serde 实现
 ├── connection/
 │   ├── receiver.rs      # WebSocket 服务端，接收 Napcat 推送
 │   └── sender.rs        # WebSocket 客户端，调用 Napcat API（Bearer 认证）
 ├── handler/
-│   ├── core.rs          # 顶层路由：PostType → message/event/notice handler
+│   ├── core.rs          # 顶层路由：PostType → message/event/notice/request handler
 │   ├── message.rs       # 消息处理 → plugin::dispatch_message()
 │   ├── event.rs         # 元事件处理 → plugin::dispatch_meta_event()
-│   └── notice.rs        # 通知处理 → plugin::dispatch_notice()
+│   ├── notice.rs        # 通知处理 → plugin::dispatch_notice()
+│   └── request.rs       # 请求处理 → plugin::dispatch_request()
 ├── event/napcat.rs      # PostType, MetaEvent, Status 类型定义
-├── message/napcat.rs    # MsgType, Message 类型定义
-├── notice/napcat.rs     # NoticeType, Notice 类型定义
+├── message/napcat.rs    # MsgType, Message, Sender, Anonymous, MessageSegment 完整定义
+├── notice/napcat.rs     # NoticeType, Notice, FileInfo, HonorType 完整定义
+├── request/napcat.rs    # RequestType, GroupRequestSubType, Request 定义
 ├── plugin/
 │   ├── mod.rs           # 插件系统入口：initialize(), priority_dispatch_*()
 │   ├── bus.rs           # FFI 总线封装，topic 常量，start_topic_receiver()
@@ -142,7 +145,7 @@ src/
 │   ├── handle.rs        # PluginHandle：运行时句柄（Library、JoinHandle、subscriber_ids）
 │   ├── loader.rs        # PluginLoader：扫描 .dll/.so，创建 subscriber，spawn plugin_main 线程
 │   ├── dispatch.rs      # 优先级分发：DISPATCH_LIST + publish_to 定向推送 + 阻断
-│   ├── data.rs          # PluginData 枚举（Message | MetaEvent | Notice）
+│   ├── data.rs          # PluginData 枚举（Message | MetaEvent | Notice | Request）
 │   ├── sender.rs        # luo9_send 接收器，路由发送请求到 Sender
 │   └── task.rs          # luo9_task 接收器 + 6 字段 cron 调度器（支持 ? L W #）
 ├── webui.rs             # WebUI：axum HTTP 服务，插件管理/日志查看/文件上传
@@ -280,3 +283,73 @@ Core 层极简：仅 `libc` 一个依赖。`serde`/`serde_json`/`libloading` 等
 | Python | `sdk/python/` | `plugin/example/python/` | 完整（Bus + Command + Payload + Bot） |
 
 所有 SDK 封装同一份 `luo9_core.dll` / `libluo9_core.so` 的 FFI 接口。插件样例均实现 `/echo`、`/task start`、`/task end` 指令。
+
+## OneBot v11 事件支持
+
+本项目全量适配 Napcat OneBot v11 协议，支持以下事件类型：
+
+### 消息事件 (PostType::Message / PostType::MessageSent)
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `message_id` | u64 | 消息 ID |
+| `message_seq` | Option<u64> | 消息序列号 |
+| `real_id` | Option<u64> | 真实消息 ID |
+| `real_seq` | Option<String> | 真实序列号 |
+| `message_type` | MsgType | `Private` / `Group` |
+| `sub_type` | SubType | `Friend` / `GroupTemp` / `Normal` / `Anonymous` 等 |
+| `user_id` | u64 | 发送者 QQ 号 |
+| `group_id` | Option<u64> | 群号（群消息时存在） |
+| `message` | Vec<MessageSegment> | 结构化消息段 |
+| `raw_message` | String | 原始消息文本（已解码 HTML 实体） |
+| `font` | u32 | 字体 |
+| `sender` | Sender | 发送者信息（含 nickname, card, sex, age, area, level, role, title） |
+| `anonymous` | Option<Anonymous> | 匿名信息（群匿名消息时存在） |
+| `message_format` | String | 消息格式（array/string） |
+
+### 通知事件 (PostType::Notice)
+
+| NoticeType | 触发场景 | 关键字段 |
+|---|---|---|
+| `FriendAdd` | 好友添加 | `user_id` |
+| `FriendRecall` | 好友消息撤回 | `user_id`, `message_id` |
+| `FriendPoke` | 好友戳一戳 | `user_id`, `target_id` |
+| `GroupAdmin` | 群管理员变动 | `group_id`, `user_id`, `sub_type`(Set/Unset) |
+| `GroupBan` | 群禁言 | `group_id`, `user_id`, `operator_id`, `duration`, `sub_type`(Ban/LiftBan) |
+| `GroupIncrease` | 群成员增加 | `group_id`, `user_id`, `operator_id`, `sub_type`(Approve/Invite) |
+| `GroupDecrease` | 群成员减少 | `group_id`, `user_id`, `operator_id`, `sub_type`(Leave/Kick/KickMe) |
+| `GroupCard` | 群名片修改 | `group_id`, `user_id`, `card_new`, `card_old` |
+| `GroupRecall` | 群消息撤回 | `group_id`, `user_id`, `operator_id`, `message_id` |
+| `GroupUpload` | 群文件上传 | `group_id`, `user_id`, `file`(FileInfo) |
+| `GroupTitle` | 群头衔变更 | `group_id`, `user_id`, `title` |
+| `Honor` | 群荣誉变更 | `group_id`, `user_id`, `honor_type`(Talkative/Performer/Emotion) |
+| `Essence` | 精华消息 | `group_id`, `user_id`, `message_id` |
+| `Poke` | 戳一戳（群内） | `group_id`, `user_id`, `target_id` |
+| `LuckyKing` | 运气王 | `group_id`, `user_id`, `target_id` |
+| `GroupMsgEmojiLike` | 表情回应（NapCat扩展） | `group_id`, `user_id`, `message_id` |
+| `Notify` | 其他通知 | 根据 `sub_type` 区分 |
+
+### 请求事件 (PostType::Request)
+
+| RequestType | 字段 | 说明 |
+|---|---|---|
+| `Friend` | `user_id`, `comment`, `flag` | 好友请求 |
+| `Group` | `group_id`, `user_id`, `comment`, `flag`, `sub_type`(Add/Invite) | 群请求 |
+
+### 元事件 (PostType::MetaEvent)
+
+| MetaEventType | 字段 | 说明 |
+|---|---|---|
+| `Lifecycle` | `sub_type`(Enable/Disable/Connect) | 生命周期事件 |
+| `Heartbeat` | `status`(online, good), `interval` | 心跳事件 |
+
+### SubType 完整列表
+
+**Lifecycle**: Enable, Disable, Connect
+**Message**: Friend, GroupTemp, GroupSelf, Other, Normal, Anonymous, Notice
+**Notice 管理**: Set, Unset
+**Notice 禁言**: Ban, LiftBan, Unban
+**Notice 成员**: Leave, Kick, KickMe, Approve, Invite, Add
+**Notice 互动**: Poke, LuckyKing
+**Notice 荣誉**: Talkative, Performer, Emotion, Honor
+**Notice 其他**: InputStatus, Title, ProfileLike

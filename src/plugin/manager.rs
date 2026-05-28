@@ -18,6 +18,8 @@ pub struct PluginStats {
     pub notice_count: u64,
     /// 元事件处理次数
     pub meta_event_count: u64,
+    /// 请求处理次数
+    pub request_count: u64,
     /// 总响应时间（微秒）
     pub total_response_time_us: u64,
     /// 最后一次响应时间（微秒）
@@ -51,6 +53,7 @@ pub struct DispatchEntry {
     pub message_sub_id: Option<usize>,
     pub notice_sub_id: Option<usize>,
     pub meta_event_sub_id: Option<usize>,
+    pub request_sub_id: Option<usize>,
 }
 
 /// 插件管理器
@@ -271,6 +274,7 @@ impl PluginManager {
                 message_sub_id: h.subscriber_ids.get("luo9_message").copied(),
                 notice_sub_id: h.subscriber_ids.get("luo9_notice").copied(),
                 meta_event_sub_id: h.subscriber_ids.get("luo9_meta_event").copied(),
+                request_sub_id: h.subscriber_ids.get("luo9_request").copied(),
             })
             .collect();
 
@@ -348,20 +352,34 @@ impl PluginManager {
         }
     }
 
+    /// 更新插件请求统计
+    pub fn update_request_stats(&mut self, name: &str, response_time_us: u64) {
+        if let Some(info) = self.plugin_infos.iter_mut().find(|p| p.name == name) {
+            info.stats.request_count += 1;
+            info.stats.total_response_time_us += response_time_us;
+            info.stats.last_response_time_us = response_time_us;
+            info.stats.last_active = Some(std::time::Instant::now());
+        }
+    }
+
     /// 获取所有插件统计信息
     pub fn get_all_stats(&self) -> Vec<PluginStatsInfo> {
-        self.plugin_infos.iter().map(|p| PluginStatsInfo {
-            name: p.name.clone(),
-            active: p.active,
-            message_count: p.stats.message_count,
-            notice_count: p.stats.notice_count,
-            meta_event_count: p.stats.meta_event_count,
-            avg_response_time_ms: if p.stats.message_count + p.stats.notice_count + p.stats.meta_event_count > 0 {
-                p.stats.total_response_time_us as f64 / (p.stats.message_count + p.stats.notice_count + p.stats.meta_event_count) as f64 / 1000.0
-            } else { 0.0 },
-            last_response_time_ms: p.stats.last_response_time_us as f64 / 1000.0,
-            error_count: p.stats.error_count,
-            last_active_secs: p.stats.last_active.map(|t| t.elapsed().as_secs()),
+        self.plugin_infos.iter().map(|p| {
+            let total_count = p.stats.message_count + p.stats.notice_count + p.stats.meta_event_count + p.stats.request_count;
+            PluginStatsInfo {
+                name: p.name.clone(),
+                active: p.active,
+                message_count: p.stats.message_count,
+                notice_count: p.stats.notice_count,
+                meta_event_count: p.stats.meta_event_count,
+                request_count: p.stats.request_count,
+                avg_response_time_ms: if total_count > 0 {
+                    p.stats.total_response_time_us as f64 / total_count as f64 / 1000.0
+                } else { 0.0 },
+                last_response_time_ms: p.stats.last_response_time_us as f64 / 1000.0,
+                error_count: p.stats.error_count,
+                last_active_secs: p.stats.last_active.map(|t| t.elapsed().as_secs()),
+            }
         }).collect()
     }
 }
@@ -374,6 +392,7 @@ pub struct PluginStatsInfo {
     pub message_count: u64,
     pub notice_count: u64,
     pub meta_event_count: u64,
+    pub request_count: u64,
     pub avg_response_time_ms: f64,
     pub last_response_time_ms: f64,
     pub error_count: u64,
