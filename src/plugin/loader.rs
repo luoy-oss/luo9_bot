@@ -152,6 +152,7 @@ impl PluginLoader {
         unsafe {
             // 尝试调用 luo9_init_subscribers 传递预创建的 subscriber ID
             // 使用 repr(C) 兼容的裸结构体定义，避免跨 crate 类型匹配问题
+            // 注意：必须与 SDK 的 PluginSubscribers 结构体字段顺序和数量完全一致
             #[repr(C)]
             struct PluginSubscribersRaw {
                 message_sub_id: i32,

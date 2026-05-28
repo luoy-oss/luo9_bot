@@ -8,7 +8,7 @@ async fn main() -> Result<()> {
     loop {
         info!("正在初始化应用...");
         let ctx: LNContext = LNContext::initialize().await?;
-
+        
         // 启动 WebUI（不依赖 WebSocket 连接）
         let webui_cfg = ctx.config.webui.clone();
         let plugin_dir = ctx.config.plugins.plugin_dir.clone();
@@ -19,6 +19,9 @@ async fn main() -> Result<()> {
                 luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token, ws_connected).await;
             });
         }
+
+        ctx.run().await?;
+        
 
         // 启动消息接收器
         let rx = ctx.rx.clone();

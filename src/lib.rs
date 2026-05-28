@@ -80,6 +80,34 @@ impl LNContext {
             Plugin::sender::init_sender(sender.clone()).await;
         }
 
+        // 启动后台重试任务（如果初始连接失败）
+        if tx.is_none() {
+            let ws_host = config.napcat.ws_server_host.clone();
+            let ws_port = config.napcat.ws_server_port;
+            let timeout = config.napcat.timeout_seconds;
+            let token = config.napcat.token.clone();
+
+            tokio::spawn(async move {
+                info!("启动 WebSocket 后台重试任务...");
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+                    info!("尝试重新连接 Napcat API...");
+                    match connection::Sender::connect(&ws_host, ws_port, timeout, &token).await {
+                        Ok(sender) => {
+                            info!("✓ Napcat API 重新连接成功");
+                            // 初始化 bus 消息发送器
+                            Plugin::sender::init_sender(sender).await;
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("Napcat API 重试失败: {}", e);
+                        }
+                    }
+                }
+            });
+        }
+
         info!("应用初始化完成");
 
         Ok(Self {
