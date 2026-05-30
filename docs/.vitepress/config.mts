@@ -27,6 +27,43 @@ export default defineConfig({
     ],
 
     sidebar: {
+      '/': [
+        {
+          text: '使用洛玖',
+          items: [
+            { text: '快速开始', link: '/guide/getting-started' },
+            { text: '配置说明', link: '/guide/configuration' },
+            { text: 'WebUI', link: '/guide/webui' },
+            { text: '部署', link: '/guide/deployment' },
+          ]
+        },
+        {
+          text: 'Rust 插件开发',
+          items: [
+            { text: '入门', link: '/sdk/rust/' },
+            { text: '消息处理', link: '/sdk/rust/messages' },
+            { text: '命令解析', link: '/sdk/rust/commands' },
+            { text: '定时任务', link: '/sdk/rust/tasks' },
+            { text: '技巧与常见问题', link: '/sdk/rust/tips' },
+            { text: 'SDK API 速查', link: '/sdk/rust/api' },
+          ]
+        },
+        {
+          text: 'API 参考',
+          items: [
+            { text: 'WebUI API', link: '/api/webui' },
+            { text: '事件类型', link: '/api/events' },
+          ]
+        },
+        {
+          text: '进阶',
+          items: [
+            { text: '插件系统原理', link: '/guide/plugin-system' },
+            { text: 'FFI 接口规范', link: '/sdk/ffi-interface' },
+            { text: '开发新 SDK', link: '/sdk/dev-new-sdk' },
+          ]
+        }
+      ],
       '/guide/': [
         {
           text: '入门',
@@ -57,16 +94,20 @@ export default defineConfig({
           ]
         },
         {
-          text: '开发插件',
+          text: '开发插件 — Rust',
           items: [
-            { text: 'Rust', link: '/sdk/rust-plugin-dev' },
+            { text: '入门', link: '/sdk/rust/' },
+            { text: '消息处理', link: '/sdk/rust/messages' },
+            { text: '命令解析', link: '/sdk/rust/commands' },
+            { text: '定时任务', link: '/sdk/rust/tasks' },
+            { text: '技巧与常见问题', link: '/sdk/rust/tips' },
           ]
         },
         {
           text: '进阶开发',
           items: [
             { text: '开发新 SDK', link: '/sdk/dev-new-sdk' },
-            { text: 'Rust SDK API', link: '/sdk/rust' },
+            { text: 'Rust SDK API', link: '/sdk/rust/api' },
           ]
         }
       ],

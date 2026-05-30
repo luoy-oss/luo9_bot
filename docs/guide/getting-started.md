@@ -93,4 +93,4 @@ cp target/release/*.so ../../plugins/    # Linux
 
 - [配置说明](/guide/configuration) — 所有配置项详解
 - [插件系统](/guide/plugin-system) — 了解插件怎么工作的
-- [写个插件](/sdk/rust-plugin-dev) — 10 分钟上手
+- [写个插件](/sdk/rust/) — 10 分钟上手

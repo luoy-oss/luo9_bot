@@ -42,5 +42,5 @@ Napcat ──WebSocket──> 宿主（Rust）
 ## 下一步
 
 - [快速开始](/guide/getting-started) — 把机器人跑起来
-- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 写你的第一个插件
+- [Rust 插件开发指南](/sdk/rust/) — 写你的第一个插件
 - [配置说明](/guide/configuration) — 了解所有配置项

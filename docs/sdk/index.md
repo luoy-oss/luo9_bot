@@ -18,7 +18,7 @@
 
 **宿主**负责连接 Napcat、接收消息、分发给插件、发送回复。
 
-**核心库（luo9_core）**是一个 C 动态库，提供消息总线和命令解析的底层函数。它不关心你用什么语言，只暴露 `extern "C"` 接口。
+**核心库luo9_core**是一个 C 动态库，提供消息总线和命令解析的底层函数。它不关心你用什么语言，只暴露 `extern "C"` 接口。
 
 **SDK** 是核心库的语言封装。它把 C 接口包装成你熟悉的 API —— 在 Rust 里是 `Bus::topic("luo9_message")`，在 Python 里是 `Bus.topic("luo9_message")`。
 
@@ -64,7 +64,7 @@ pub extern "C" fn plugin_main() {
 
 ## 想写插件？
 
-- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 从模板开始，10 分钟写好第一个插件
+- [Rust 插件开发指南](/sdk/rust/) — 从模板开始，10 分钟写好第一个插件
 
 ## 想开发新语言的 SDK？
 

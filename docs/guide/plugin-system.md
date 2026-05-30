@@ -1,7 +1,7 @@
 # 插件系统
 
 ::: tip
-想直接写插件？跳到 [Rust 插件开发指南](/sdk/rust-plugin-dev)。
+想直接写插件？跳到 [Rust 插件入门](/sdk/rust/)。
 :::
 
 ## 一句话概括
@@ -69,5 +69,5 @@ Cron 表达式是 6 字段格式：`秒 分 时 日 月 周`，支持 `? L W #` 
 
 ## 下一步
 
-- [写个插件](/sdk/rust-plugin-dev) — 实际动手
+- [写个插件](/sdk/rust/) — 实际动手
 - [配置说明](/guide/configuration) — 了解优先级和阻断的配置

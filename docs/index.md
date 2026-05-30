@@ -7,34 +7,32 @@ hero:
   tagline: 基于 Napcat OneBot v11，用你喜欢的语言写插件
   actions:
     - theme: brand
-      text: 从这里开始
+      text: 快速开始
       link: /guide/getting-started
     - theme: alt
-      text: 写个插件
-      link: /sdk/rust-plugin-dev
+      text: Rust 插件开发
+      link: /sdk/rust/
     - theme: alt
       text: GitHub
       link: https://github.com/luoy-oss/luo9_bot
 
 features:
-  - icon: ⚡
-    title: 跑得快
-    details: Rust 异步运行时打底，WebSocket 实时通信，消息不过夜
+  - icon: 🚀
+    title: 我想用洛玖
+    details: 从零开始，把机器人跑起来，装上插件开始用
+    link: /guide/getting-started
   - icon: 🔌
-    title: 插件自由
-    details: FFI 消息总线架构，Rust、C++、Python 都能写插件，语言不是限制
-  - icon: 🎯
-    title: 消息说了算
-    details: 优先级分发 + 阻断机制，谁先收到消息、谁能拦住消息，你说了算
-  - icon: 🔄
-    title: 热重载
-    details: 插件更新不用重启机器人，禁用、替换、启用，一气呵成
-  - icon: ⏰
-    title: 定时任务
-    details: 内置 cron 调度器，6 字段表达式，L/W/# 特殊字符都支持
-  - icon: 🌐
-    title: WebUI
-    details: 粉彩风格管理界面，插件管理、日志查看、配置编辑，浏览器里搞定
+    title: 我想写插件
+    details: 用 Rust 写一个自己的插件，10 分钟上手
+    link: /sdk/rust/
+  - icon: 📚
+    title: 我想了解 API
+    details: WebUI 接口、事件类型、消息格式，开发参考
+    link: /api/
+  - icon: 🛠️
+    title: 我想开发 SDK
+    details: 为其他语言开发 SDK，对接 FFI 接口
+    link: /sdk/dev-new-sdk
 ---
 
 <style>
