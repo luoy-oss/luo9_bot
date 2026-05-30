@@ -108,8 +108,8 @@ export default defineConfig({
     ],
 
     footer: {
-      message: '基于 MIT 许可发布',
-      copyright: 'Copyright © 2024-2026 luo9_bot'
+      message: '基于 GPLv3 许可发布',
+      copyright: 'Copyright © 2026 luo9_bot'
     },
 
     search: {
