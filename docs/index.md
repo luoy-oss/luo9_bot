@@ -34,14 +34,3 @@ features:
     details: 为其他语言开发 SDK，对接 FFI 接口
     link: /sdk/dev-new-sdk
 ---
-
-<style>
-:root {
-  --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #e96d8b 30%, #f9a8d4);
-}
-
-:root.dark {
-  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #f9a8d4 30%, #e96d8b);
-}
-</style>
