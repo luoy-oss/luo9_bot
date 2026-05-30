@@ -1,8 +1,6 @@
 # FFI 接口规范
 
-## 概述
-
-`luo9_core` 是 FFI 接口层，暴露 `extern "C"` 函数供各语言 SDK 调用。
+`luo9_core` 暴露的 C 函数。SDK 开发者看这篇。
 
 ## Bus 消息总线
 
@@ -12,12 +10,7 @@
 int luo9_bus_init();
 ```
 
-初始化消息总线。
-
-| 返回值 | 含义 |
-|---|---|
-| `0` | 成功 |
-| `-1` | 已初始化（可忽略） |
+初始化总线。返回 `0` 成功，`-1` 已经初始化过（可忽略）。
 
 ### luo9_bus_subscribe
 
@@ -25,12 +18,7 @@ int luo9_bus_init();
 int luo9_bus_subscribe(const char* topic);
 ```
 
-订阅指定 topic。
-
-| 返回值 | 含义 |
-|---|---|
-| `>= 0` | subscriber_id |
-| `-1` | 参数错误 |
+订阅 topic。返回 subscriber_id（>=0），失败返回 `-1`。
 
 ### luo9_bus_unsubscribe
 
@@ -38,7 +26,7 @@ int luo9_bus_subscribe(const char* topic);
 int luo9_bus_unsubscribe(const char* topic, int subscriber_id);
 ```
 
-取消订阅，标记 subscriber 为 dead 并推送哨兵消息。
+取消订阅。会推送哨兵消息唤醒阻塞的 `wait_pop`。
 
 | 返回值 | 含义 |
 |---|---|
@@ -54,24 +42,13 @@ int luo9_bus_publish(const char* topic, const char* payload);
 
 广播消息给 topic 的所有 subscriber。
 
-| 返回值 | 含义 |
-|---|---|
-| `0` | 成功 |
-| `-1` | 参数错误 |
-| `-2` | 总线未初始化 |
-
 ### luo9_bus_publish_to
 
 ```c
-int luo9_bus_publish_to(
-    const char* topic,
-    const char* payload,
-    const int* subscriber_ids,
-    int subscriber_ids_len
-);
+int luo9_bus_publish_to(const char* topic, const char* payload, const int* ids, int ids_len);
 ```
 
-定向推送消息给指定的 subscriber。
+定向推送给指定的 subscriber。
 
 ### luo9_bus_pop
 
@@ -79,12 +56,7 @@ int luo9_bus_publish_to(
 char* luo9_bus_pop(const char* topic, int subscriber_id);
 ```
 
-非阻塞取消息。
-
-| 返回值 | 含义 |
-|---|---|
-| 非 null | 消息字符串（需 `luo9_bus_free_string` 释放） |
-| null | 队列为空或错误 |
+非阻塞取消息。有消息返回字符串指针，没有返回 `null`。
 
 ### luo9_bus_wait_pop
 
@@ -92,7 +64,7 @@ char* luo9_bus_pop(const char* topic, int subscriber_id);
 char* luo9_bus_wait_pop(const char* topic, int subscriber_id);
 ```
 
-阻塞取消息，挂起线程直到有消息。当 subscriber 被取消订阅时返回哨兵消息 `__luo9_unsubscribed__`。
+阻塞取消息。挂起线程直到有消息。取消订阅时返回哨兵 `__luo9_unsubscribed__`。
 
 ### luo9_bus_free_string
 
@@ -100,33 +72,25 @@ char* luo9_bus_wait_pop(const char* topic, int subscriber_id);
 void luo9_bus_free_string(char* ptr);
 ```
 
-释放由 `luo9_bus_pop` 或 `luo9_bus_wait_pop` 返回的字符串。
+释放 `luo9_bus_pop` 和 `luo9_bus_wait_pop` 返回的字符串。
 
 ## Command 命令解析
 
 ### luo9_command_create
 
 ```c
-CommandHandle* luo9_command_create(
-    const char* msg,
-    const char* cmd_name,
-    int mode,
-    char prefix_char
-);
+CommandHandle* luo9_command_create(const char* msg, const char* cmd_name, int mode, char prefix_char);
 ```
 
 创建命令解析器。
 
 | mode | 含义 |
 |---|---|
-| `0` | Required — 必须有前缀 |
-| `1` | Optional — 前缀可选 |
-| `2` | None — 无前缀 |
+| `0` | 必须有前缀 |
+| `1` | 前缀可选 |
+| `2` | 无前缀 |
 
-| 返回值 | 含义 |
-|---|---|
-| 非 null | CommandHandle 指针 |
-| null | 解析失败 |
+返回句柄指针，解析失败返回 `null`。
 
 ### luo9_command_free
 
@@ -134,7 +98,7 @@ CommandHandle* luo9_command_create(
 void luo9_command_free(CommandHandle* handle);
 ```
 
-释放命令解析器。
+释放句柄。
 
 ### luo9_command_get_name
 
@@ -142,7 +106,7 @@ void luo9_command_free(CommandHandle* handle);
 char* luo9_command_get_name(const CommandHandle* handle);
 ```
 
-获取命令名称（需 `luo9_free_string` 释放）。
+获取命令名。返回的字符串用 `luo9_free_string` 释放。
 
 ### luo9_command_get_args_raw
 
@@ -150,7 +114,7 @@ char* luo9_command_get_name(const CommandHandle* handle);
 char* luo9_command_get_args_raw(const CommandHandle* handle);
 ```
 
-获取原始参数字符串（需 `luo9_free_string` 释放）。
+获取原始参数字符串。
 
 ### luo9_command_has_args
 
@@ -158,11 +122,7 @@ char* luo9_command_get_args_raw(const CommandHandle* handle);
 int luo9_command_has_args(const CommandHandle* handle);
 ```
 
-| 返回值 | 含义 |
-|---|---|
-| `1` | 有参数 |
-| `0` | 无参数 |
-| `-1` | 错误 |
+`1` 有参数，`0` 无参数，`-1` 错误。
 
 ### luo9_command_args_count
 
@@ -170,7 +130,7 @@ int luo9_command_has_args(const CommandHandle* handle);
 int luo9_command_args_count(const CommandHandle* handle);
 ```
 
-获取参数数量（`-1` 表示错误）。
+参数数量。`-1` 表示错误。
 
 ### luo9_command_get_arg
 
@@ -178,7 +138,7 @@ int luo9_command_args_count(const CommandHandle* handle);
 char* luo9_command_get_arg(const CommandHandle* handle, unsigned int index);
 ```
 
-获取指定索引的参数（需 `luo9_free_string` 释放）。
+获取第 N 个参数。越界返回 `null`。
 
 ### luo9_free_string
 
@@ -186,9 +146,9 @@ char* luo9_command_get_arg(const CommandHandle* handle, unsigned int index);
 void luo9_free_string(char* ptr);
 ```
 
-释放由 `luo9_command_*` 函数返回的字符串。
+释放 `luo9_command_*` 返回的字符串。
 
-## 版本信息
+## 版本
 
 ### luo9_version
 
@@ -196,7 +156,7 @@ void luo9_free_string(char* ptr);
 const char* luo9_version();
 ```
 
-获取核心库版本号（编译时从 `Cargo.toml` 获取）。返回的字符串由 core 管理，**不需要**释放。
+获取核心库版本。返回的字符串由 core 管理，**不需要**释放。
 
 ## 插件初始化
 
@@ -219,19 +179,17 @@ typedef struct {
 } PluginSubscribers;
 ```
 
-## 内存管理
+## 内存管理速查
 
-| 函数 | 释放函数 |
+| 谁返回的 | 用什么释放 |
 |---|---|
-| `luo9_bus_pop` | `luo9_bus_free_string` |
-| `luo9_bus_wait_pop` | `luo9_bus_free_string` |
-| `luo9_command_get_name` | `luo9_free_string` |
-| `luo9_command_get_args_raw` | `luo9_free_string` |
-| `luo9_command_get_arg` | `luo9_free_string` |
+| `luo9_bus_pop` / `luo9_bus_wait_pop` | `luo9_bus_free_string` |
+| `luo9_command_get_name` 等 | `luo9_free_string` |
 | `luo9_command_create` | `luo9_command_free` |
+| `luo9_version` | 不用释放 |
 
 ## 线程安全
 
-- 所有 `luo9_bus_*` 函数是线程安全的
-- 每个 subscriber 应在单线程中使用（pop/wait_pop）
-- Command 解析器不是线程安全的，不应跨线程共享
+- `luo9_bus_*` 函数线程安全
+- 每个 subscriber 建议在单线程中使用
+- Command 句柄不要跨线程共享

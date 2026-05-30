@@ -1,89 +1,46 @@
 # 介绍
 
-**洛玖机器人 (luo9_bot)** 是一个基于 Napcat (OneBot v11) 协议的 QQ 机器人框架，通过 FFI 消息总线支持原生 DLL/SO 插件。
+## 洛玖是什么
 
-## 核心特性
+洛玖是一个 QQ 机器人框架，基于 Napcat 的 OneBot v11 协议。
 
-### 🚀 高性能架构
+它的核心设计思路很简单：**宿主负责连接，插件负责逻辑**。你只需要关心插件要做什么，不用操心 WebSocket 怎么连、消息怎么收发。
 
-- **Rust 异步运行时**：基于 tokio，WebSocket 实时通信
-- **无阻塞消息处理**：使用 `spawn_blocking` + `wait_pop` 避免阻塞 tokio worker
-- **无界队列**：Bus 不丢消息，保证消息可靠性
+## 为什么选择洛玖
 
-### 🔌 多语言插件支持
+**写插件的语言你来定。** 洛玖通过 FFI 消息总线和原生共享库（DLL/SO）来加载插件。Rust、C++、Python，甚至任何能调用 C 接口的语言，都能写插件。
 
-支持三种语言编写插件：
+**插件运行在独立线程。** 阻塞操作不会卡住机器人主循环。你的插件可以安心做耗时任务，不用担心影响其他插件。
 
-当前官方提供 Rust SDK（完整实现），FFI 接口公开，任何语言均可编写插件。
+**消息分发有优先级。** 高优先级插件先处理，还能设置阻断，让低优先级插件收不到已被处理的消息。
 
-### 🎯 精确消息控制
+**热重载不用停机。** 更新插件时，禁用旧的、加载新的，机器人继续运行，用户无感知。
 
-- **优先级定向分发**：按优先级降序遍历插件，使用 `publish_to` 定向推送
-- **消息阻断**：高优先级插件可启用 `block_enabled` 阻止低优先级插件接收消息
-- **Per-topic 并发**：不同 topic 的 publish/pop 互不阻塞
-
-### 🔄 热重载机制
-
-插件支持运行时启用/禁用/热重载，**插件代码零修改**：
-
-1. **加载**：宿主为每个插件预创建 subscriber，通过 `luo9_init_subscribers` FFI 传递 ID
-2. **禁用**：调用 `unsubscribe_all()` 标记 dead + 唤醒线程 → 插件循环退出 → 线程结束
-3. **热重载**：禁用后重新加载 .dll/.so，创建新 subscriber，spawn 新线程
-
-### ⏰ 定时任务
-
-内置轻量 cron 调度器，支持 6 字段格式：
+## 架构一览
 
 ```
-秒 分 时 日 月 周
+Napcat ──WebSocket──> 宿主（Rust）
+                          │
+                     消息路由
+                          │
+                     FFI 消息总线
+                     ├── luo9_message      → 插件收到 QQ 消息
+                     ├── luo9_meta_event   → 插件收到心跳/生命周期
+                     ├── luo9_notice       → 插件收到通知事件
+                     ├── luo9_request      → 插件收到请求事件
+                     ├── luo9_task         → 插件收到定时任务触发
+                     ├── luo9_task_miso    → 插件发布任务请求
+                     └── luo9_send         → 插件请求发送消息
+                          │
+                     插件（DLL/SO，独立线程）
 ```
 
-支持的特殊字符：`*` `?` `-` `,` `/` `L` `W` `#`
+宿主负责和 Napcat 通信，把收到的消息通过总线分发给插件。插件处理完后，通过总线把要发送的消息交给宿主。
 
-### 🌐 WebUI 管理
-
-可爱粉彩风格 Web 界面，支持：
-
-- 插件管理（启用/禁用/热重载/优先级/阻断开关）
-- 实时日志查看
-- 配置编辑
-- 插件商店下载
-
-## 技术架构
-
-```
-Napcat ──WebSocket──> Receiver (:3001)
-                          │
-                     handler/core.rs  ← JSON 路由
-                     ├── handler/message.rs
-                     ├── handler/event.rs
-                     ├── handler/notice.rs
-                     └── handler/request.rs
-                          │
-                     plugin::dispatch_*()
-                          │
-                     FFI Bus (luo9_core.dll)
-                     ├── topic: luo9_message
-                     ├── topic: luo9_meta_event
-                     ├── topic: luo9_notice
-                     ├── topic: luo9_request
-                     ├── topic: luo9_task_miso ──> plugin/task.rs (cron 调度器)
-                     ├── topic: luo9_task       ──> 调度事件下发
-                     └── topic: luo9_send ──> plugin/sender.rs ──> Sender (:23001) ──> Napcat API
-                          │
-                     插件 (DLL/SO，独立线程)
-```
-
-## 三层架构
-
-| 层 | 位置 | 职责 |
-|---|---|---|
-| 宿主 (Host) | `rust/` | WebSocket 连接、事件路由、插件生命周期管理 |
-| 核心库 (Core) | `sdk/core/` → `luo9_core.dll` | FFI 消息总线、命令解析，暴露 `extern "C"` 函数 |
-| SDK | `sdk/rust/` | 各语言对 Core FFI 的惯用封装 |
+就这么简单。
 
 ## 下一步
 
-- [快速开始](/guide/getting-started) — 安装和运行机器人
-- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 用 Rust 编写插件
-- [配置说明](/guide/configuration) — 详细配置选项
+- [快速开始](/guide/getting-started) — 把机器人跑起来
+- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 写你的第一个插件
+- [配置说明](/guide/configuration) — 了解所有配置项

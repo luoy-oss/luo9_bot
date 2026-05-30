@@ -1,31 +1,29 @@
 # 快速开始
 
-## 环境要求
+## 你需要准备什么
 
-- **Rust**: 1.75+（推荐使用 [rustup](https://rustup.rs/) 安装）
-- **Napcat**: 已安装并配置好 QQ 登录，开启 OneBot v11 协议
-- **操作系统**: Windows 10+ / Linux (x86_64)
+- **Rust 工具链**：1.75+，没有的话用 [rustup](https://rustup.rs/) 装一个
+- **Napcat**：已经装好并登录了 QQ，开启了 OneBot v11 协议
+- **操作系统**：Windows 10+ 或 Linux
 
-## 第一步：获取代码
+## 把代码拉下来
 
 ```bash
 git clone https://github.com/luoy-oss/luo9_bot.git
 cd luo9_bot/rust
 ```
 
-## 第二步：配置
+## 改配置
 
-编辑 `config/default.toml`，填写 Napcat 连接信息：
+编辑 `config/default.toml`，把 Napcat 的连接信息填上：
 
 ```toml
 [napcat]
-# Napcat WebSocket 服务端地址
 ws_client_host = "127.0.0.1"
 ws_client_port = 3001
-# Napcat API 端口
 ws_server_host = "127.0.0.1"
 ws_server_port = 23001
-# access token（如有）
+timeout_seconds = 30
 token = ""
 
 [plugins]
@@ -35,38 +33,22 @@ auto_load = true
 
 [webui]
 enabled = true
-host = "127.0.0.1"
+host = "0.0.0.0"
 port = 27080
-token = ""  # 留空则自动生成
+token = ""
 ```
 
-## 第三步：构建
+`ws_client_port` 是 Napcat 推送消息用的端口，`ws_server_port` 是调 Napcat API 用的端口。具体填多少看你 Napcat 的配置。
 
-```bash
-# 开发构建
-cargo build
+`token` 留空的话，每次启动会自动生成一个随机 token 保护 WebUI。
 
-# Release 极致优化（LTO + 单 codegen unit，推荐生产环境）
-cargo build --release
-```
-
-### Feature Flags
-
-```bash
-# 心跳/生命周期调试日志
-cargo build --features bot_debug
-
-# 插件分发调试日志
-cargo build --features plugin_dispatch_debug
-```
-
-## 第四步：运行
+## 编译运行
 
 ```bash
 cargo run
 ```
 
-启动成功后，你将看到类似输出：
+看到类似这样的日志，说明跑起来了：
 
 ```
 INFO  luo9_bot 启动中...
@@ -76,56 +58,39 @@ INFO  WebUI 启动于 http://127.0.0.1:27080?token=a1b2c3d4e5f67890
 INFO  luo9_bot 已就绪
 ```
 
-## 第五步：安装插件
+日志里的 WebUI 地址复制到浏览器打开，就能看到管理界面了。
 
-### 方式一：通过 WebUI 安装
+## 装个插件试试
 
-1. 打开浏览器访问启动日志中的 WebUI 地址
-2. 切换到「插件商店」标签
-3. 选择需要的插件，点击「安装」
+### 从 WebUI 装
 
-### 方式二：手动安装
+打开 WebUI，切到「插件商店」标签，选一个装。
 
-将编译好的 `.dll`（Windows）或 `.so`（Linux）文件放入 `plugins/` 目录。
+### 手动装
 
-### 方式三：从源码编译
+把编译好的 `.dll`（Windows）或 `.so`（Linux）扔进 `plugins/` 目录。
+
+### 自己编译
 
 ```bash
 cd plugin/example/rust
 cargo build --release
-cp target/release/*.dll ../../plugins/  # Windows
-cp target/release/*.so ../../plugins/   # Linux
+cp target/release/*.dll ../../plugins/   # Windows
+cp target/release/*.so ../../plugins/    # Linux
 ```
 
-## 第六步：验证
+装好后重启机器人，在 QQ 群里发 `/echo 你好` 试试。
 
-在 QQ 群中发送消息，观察机器人是否响应。如果安装了示例插件，可以尝试：
+## 跑不起来？
 
-```
-/echo 你好世界
-```
+**连不上 Napcat**：检查 Napcat 有没有在跑，端口对不对。
 
-## 常见问题
+**插件没加载**：看日志有没有报错。常见原因：文件放错目录了、扩展名不对。
 
-### 连接 Napcat 失败
-
-检查 Napcat 是否正常运行，以及 WebSocket 端口是否与配置一致。
-
-### 插件未加载
-
-1. 确认插件文件位于 `plugins/` 目录
-2. 确认插件文件扩展名正确（`.dll` 或 `.so`）
-3. 检查日志中是否有加载错误信息
-
-### WebUI 无法访问
-
-1. 确认 `webui.enabled = true`
-2. 检查端口是否被占用
-3. 确认防火墙允许对应端口
+**WebUI 打不开**：确认 `webui.enabled = true`，端口没被占用。
 
 ## 下一步
 
-- [配置说明](./configuration.md) — 了解所有配置项
-- [插件系统](./plugin-system.md) — 了解插件工作原理
-- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 用 Rust 编写插件
-- [WebUI](./webui.md) — 使用 Web 界面管理机器人
+- [配置说明](/guide/configuration) — 所有配置项详解
+- [插件系统](/guide/plugin-system) — 了解插件怎么工作的
+- [写个插件](/sdk/rust-plugin-dev) — 10 分钟上手

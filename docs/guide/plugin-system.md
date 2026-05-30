@@ -1,166 +1,73 @@
 # 插件系统
 
 ::: tip
-想要编写插件？请查看 [Rust 插件开发指南](/sdk/rust-plugin-dev)。
+想直接写插件？跳到 [Rust 插件开发指南](/sdk/rust-plugin-dev)。
 :::
 
-## 概述
+## 一句话概括
 
-luo9_bot 的插件系统基于 FFI 消息总线设计，插件是独立的共享库（DLL/SO），通过 `luo9_core` 提供的 `extern "C"` 函数进行进程内 pub/sub 通信。
+宿主负责收发消息，插件负责处理逻辑。它们之间通过消息总线通信。
 
-## 插件生命周期
+## 插件是怎么加载的
 
-### 1. 加载阶段
+1. 宿主启动，扫描 `plugins/` 目录
+2. 找到 DLL/SO 文件，用 `dlopen` 加载
+3. 为每个插件在每个 topic 上创建 subscriber
+4. 调用插件的 `plugin_main`，在独立线程里跑起来
 
-```
-宿主扫描插件目录
-    ↓
-为每个插件预创建 subscriber（各 topic）
-    ↓
-通过 luo9_init_subscribers FFI 传递 ID
-    ↓
-插件的 SDK 内部透明使用预分配 ID
-```
+插件跑起来后，就进入了消息循环：从总线取消息，处理，可能发个回复，然后继续等下一条。
 
-### 2. 运行阶段
+## 消息怎么分发
+
+宿主收到 QQ 消息后，不会广播给所有插件。它按优先级从高到低，一个一个定向推送：
 
 ```
-插件在独立 OS 线程中运行
-    ↓
-通过 Bus::topic().subscribe() 获取 subscriber_id
-    ↓
-循环 wait_pop() 接收消息
-    ↓
-处理消息并通过 Bot::send_*() 回复
+插件 A（优先级 100）→ 收到消息
+    ↓ 如果 A 没有设置阻断
+插件 B（优先级 50）→ 收到消息
+    ↓ 如果 B 没有设置阻断
+插件 C（优先级 0）→ 收到消息
 ```
 
-### 3. 禁用 / 热重载
+如果插件 A 设置了 `block_enabled = true`，消息到 A 就停了，B 和 C 收不到。
 
-```
-调用 unsubscribe_all() 标记 dead + 唤醒线程
-    ↓
-插件 wait_pop 收到 sentinel __luo9_unsubscribed__
-    ↓
-循环退出 → 线程结束 → Arc<Library> 释放 → dlclose
-    ↓
-（热重载时）重新加载 .dll/.so，创建新 subscriber，spawn 新线程
-```
+这个机制让你可以做"消息拦截器"——比如一个安全插件，检查消息内容，觉得有问题就阻断，后面的插件就看不到了。
 
-**插件代码零修改**即可支持热重载。
+## 插件怎么回复
 
-## 插件入口函数
-
-插件必须导出 `plugin_main` 函数，在独立线程中运行：
+插件通过 `luo9_send` topic 发送回复：
 
 ```rust
-#[unsafe(no_mangle)]
-pub extern "C" fn plugin_main() {
-    // 初始化总线
-    Bus::init().unwrap();
-
-    // 订阅消息
-    let sub_id = Bus::topic("luo9_message").subscribe().unwrap();
-
-    // 消息循环
-    loop {
-        match Bus::topic("luo9_message").wait_pop(sub_id) {
-            Ok(msg) => {
-                // 处理消息
-            }
-            Err(BusError::Unsubscribed) => {
-                // 收到取消订阅信号，退出循环
-                break;
-            }
-            Err(e) => {
-                eprintln!("Error: {:?}", e);
-            }
-        }
-    }
-}
+Bot::send_group_msg(group_id, CString::new("你好！").unwrap());
 ```
 
-## 消息处理流程
-
-```
-Napcat 推送消息
-    ↓
-Receiver 接收 WebSocket 消息
-    ↓
-handler/core.rs 解析 PostType
-    ↓
-handler/message.rs / event.rs / notice.rs
-    ↓
-plugin::dispatch_*() 按优先级分发
-    ↓
-Bus::publish_to() 定向推送给指定 subscriber
-    ↓
-插件 wait_pop() 收到消息
-    ↓
-插件处理并通过 Bus::topic("luo9_send").publish() 回复
-    ↓
-plugin/sender.rs 接收发送请求 → Sender 发送到 Napcat API
-```
-
-## 消息格式
-
-所有消息通过 Bus 传输时使用统一的 JSON 格式（详见 [Payload 载荷格式](/sdk/payload)）：
-
-```json
-{
-  "Message": {
-    "message_type": "group",
-    "user_id": 123456,
-    "group_id": 789012,
-    "message": "你好",
-    "time": 1714500000,
-    "self_id": 987654,
-    "message_id": 12345,
-    "sender": {
-      "nickname": "测试用户",
-      "role": "member"
-    }
-  }
-}
-```
-
-## 发送消息
-
-插件通过向 `luo9_send` topic 发送 JSON 请求来发送消息：
-
-```json
-{"action": "send_group_msg", "group_id": 789012, "message": "收到你的消息了！"}
-```
-
-```json
-{"action": "send_private_msg", "user_id": 123456, "message": "这是私聊回复"}
-```
+宿主会从 `luo9_send` 取出请求，调用 Napcat API 发送。
 
 ## 定时任务
 
-插件可以向 `luo9_task_miso` topic 发布任务请求：
+插件可以创建定时任务，让宿主在指定时间通知它：
 
-```json
-{"action": "schedule", "task_name": "my_task", "cron": "0 */5 * * * *", "payload": "任意数据"}
+```
+插件 → luo9_task_miso: {"action":"schedule","task_name":"my_task","cron":"0 */5 * * * *"}
+                                    ↓
+                           宿主的 cron 调度器
+                                    ↓ 定时触发
+插件 ← luo9_task: {"event":"tick","task_name":"my_task"}
 ```
 
-取消任务：
+Cron 表达式是 6 字段格式：`秒 分 时 日 月 周`，支持 `? L W #` 等特殊字符。
 
-```json
-{"action": "cancel", "task_name": "my_task"}
-```
+## 热重载
 
-宿主调度器到期后向 `luo9_task` topic 发布事件：
+更新插件不用停机器人：
 
-```json
-{"event": "tick", "task_name": "my_task", "payload": "任意数据"}
-```
+1. 禁用插件 → 宿主调用 `unsubscribe_all()`，插件收到哨兵消息，退出循环，线程结束
+2. 替换 DLL/SO 文件
+3. 启用插件 → 宿主重新加载，创建新 subscriber，spawn 新线程
 
-**注意**：任务请求发到 `luo9_task_miso`，任务事件从 `luo9_task` 接收。插件应在订阅 `luo9_task` **之前**发布 task 请求到 `luo9_task_miso`，否则会通过 latch 机制收到自己的请求。
+整个过程对用户透明，插件代码也不需要做任何特殊处理。
 
-## 最佳实践
+## 下一步
 
-1. **独立线程**：插件运行在独立 OS 线程，阻塞调用不会影响 tokio 运行时
-2. **错误恢复**：单个消息处理失败不应导致插件退出
-3. **资源清理**：在 `plugin_main` 返回前清理所有资源
-4. **日志输出**：使用 `eprintln!` 输出调试信息，宿主会捕获并显示
-5. **优先级设置**：合理设置插件优先级，避免消息处理顺序混乱
+- [写个插件](/sdk/rust-plugin-dev) — 实际动手
+- [配置说明](/guide/configuration) — 了解优先级和阻断的配置

@@ -1,143 +1,83 @@
 # 开发新 SDK
 
-本指南面向希望为 luo9_bot 开发新语言 SDK 的开发者。
+想给其他语言写 SDK？这篇说清楚需要对接什么。
 
-## 概述
+## 核心思路
 
-SDK 是对 `luo9_core` FFI 接口的语言封装层。开发新 SDK 的核心工作是：
+SDK 的工作很简单：把 `luo9_core` 的 C 函数包装成该语言的惯用 API。
 
+```
+C 函数（luo9_core）
+    ↓ 你的 SDK
+语言惯用 API（比如 Python 的 Bus.topic("luo9_message").pop()）
+    ↓ 插件开发者用
+插件
+```
+
+你需要做的事情：
 1. 链接 `luo9_core.dll` / `libluo9_core.so`
 2. 声明 FFI 函数
-3. 封装为该语言的惯用 API
+3. 包装成该语言的风格
 
-## 步骤 1：链接 luo9_core
+## 要对接哪些函数
 
-SDK 需要链接 `luo9_core.dll`（Windows）或 `libluo9_core.so`（Linux）。
+完整的函数列表在 [FFI 接口规范](/sdk/ffi-interface)，这里列一下核心的几个：
 
-## 步骤 2：声明 FFI 函数
+**消息总线**（必须）：
+- `luo9_bus_init()` — 初始化总线
+- `luo9_bus_subscribe(topic)` — 订阅 topic
+- `luo9_bus_unsubscribe(topic, sub_id)` — 取消订阅
+- `luo9_bus_publish(topic, payload)` — 发消息
+- `luo9_bus_publish_to(topic, payload, ids, len)` — 定向发消息
+- `luo9_bus_pop(topic, sub_id)` — 非阻塞取消息
+- `luo9_bus_wait_pop(topic, sub_id)` — 阻塞取消息
+- `luo9_bus_free_string(ptr)` — 释放字符串
 
-需要声明以下 `extern "C"` 函数（详见 [FFI 接口规范](/sdk/ffi-interface)）：
+**命令解析**（推荐）：
+- `luo9_command_create(...)` — 创建命令解析器
+- `luo9_command_get_name(handle)` — 获取命令名
+- `luo9_command_get_args_raw(handle)` — 获取原始参数
+- `luo9_command_has_args(handle)` — 有没有参数
+- `luo9_command_args_count(handle)` — 参数数量
+- `luo9_command_get_arg(handle, index)` — 获取第 N 个参数
+- `luo9_command_free(handle)` — 释放解析器
+- `luo9_free_string(ptr)` — 释放字符串
+
+**版本**（推荐）：
+- `luo9_version()` — 获取核心库版本
+
+## 关键细节
+
+### 预分配 Subscriber
+
+宿主在加载插件时会预创建 subscriber，然后通过 `luo9_init_subscribers` 传给插件。SDK 的 `subscribe()` 应该先检查有没有预分配的 ID，有的话直接用，不用再调 FFI。
 
 ```c
-// Bus 消息总线
-int luo9_bus_init();
-int luo9_bus_subscribe(const char* topic);
-int luo9_bus_unsubscribe(const char* topic, int subscriber_id);
-int luo9_bus_publish(const char* topic, const char* payload);
-int luo9_bus_publish_to(const char* topic, const char* payload, const int* ids, int ids_len);
-char* luo9_bus_pop(const char* topic, int subscriber_id);
-char* luo9_bus_wait_pop(const char* topic, int subscriber_id);
-void luo9_bus_free_string(char* ptr);
+typedef struct {
+    int message_sub_id;
+    int meta_event_sub_id;
+    int notice_sub_id;
+    int request_sub_id;
+    int task_sub_id;
+    int send_sub_id;
+} PluginSubscribers;
 
-// 版本
-const char* luo9_version();
-
-// Command 命令解析
-CommandHandle* luo9_command_create(const char* msg, const char* cmd_name, int mode, char prefix);
-void luo9_command_free(CommandHandle* handle);
-char* luo9_command_get_name(const CommandHandle* handle);
-char* luo9_command_get_args_raw(const CommandHandle* handle);
-int luo9_command_has_args(const CommandHandle* handle);
-int luo9_command_args_count(const CommandHandle* handle);
-char* luo9_command_get_arg(const CommandHandle* handle, unsigned int index);
-void luo9_free_string(char* ptr);
+void luo9_init_subscribers(const PluginSubscribers* subscribers);
 ```
 
-## 步骤 3：实现 Bus 封装
+### 哨兵消息
 
-核心逻辑：
+取消订阅时，`wait_pop` 会返回一个特殊字符串 `__luo9_unsubscribed__`。SDK 应该识别它，转成该语言的错误类型（比如异常、Error 枚举等）。
 
-```rust
-pub struct Bus;
-impl Bus {
-    pub fn init() -> Result<(), BusError> { /* luo9_bus_init */ }
-    pub fn topic(name: &str) -> Topic { Topic { name } }
-}
+### 字符串释放
 
-pub struct Topic<'a> { name: &'a str }
-impl<'a> Topic<'a> {
-    pub fn subscribe(&self) -> Result<usize, BusError> {
-        // 1. 检查预分配 ID（PRECREATED_SUBSCRIBERS）
-        // 2. 若无，调用 luo9_bus_subscribe
-    }
-    pub fn pop(&self, subscriber_id: usize) -> Option<String> {
-        // 调用 luo9_bus_pop
-        // 若返回 sentinel "__luo9_unsubscribed__"，返回 None
-    }
-    pub fn wait_pop(&self, subscriber_id: usize) -> Result<String, BusError> {
-        // 调用 luo9_bus_wait_pop
-        // 若返回 sentinel "__luo9_unsubscribed__"，返回 Err(BusError::Unsubscribed)
-    }
-    pub fn publish(&self, payload: &str) -> Result<(), BusError> { /* luo9_bus_publish */ }
-    pub fn publish_to(&self, payload: &str, ids: &[usize]) -> Result<(), BusError> { /* luo9_bus_publish_to */ }
-}
-```
+`luo9_bus_pop`、`luo9_bus_wait_pop`、`luo9_command_*` 返回的字符串是 C 分配的，必须用对应的 free 函数释放。忘了释放就是内存泄漏。
 
-## 步骤 4：实现 Command 封装
+### 插件入口
 
-```rust
-pub struct Command { handle: *mut CommandHandle }
-impl Command {
-    pub fn parse(msg: &str, cmd_name: &str, mode: PrefixMode) -> Option<Self> {
-        // 调用 luo9_command_create
-    }
-    pub fn name(&self) -> &str { /* luo9_command_get_name */ }
-    pub fn args_raw(&self) -> String { /* luo9_command_get_args_raw */ }
-    pub fn has_args(&self) -> bool { /* luo9_command_has_args */ }
-    pub fn args_count(&self) -> usize { /* luo9_command_args_count */ }
-    pub fn arg_at(&self, index: usize) -> Option<&str> { /* luo9_command_get_arg */ }
-}
-```
-
-## 步骤 5：实现 Payload 解析
-
-```rust
-#[derive(Debug, Deserialize)]
-pub enum BusPayload {
-    Message(MessagePayload),
-    MetaEvent(MetaEventPayload),
-    Notice(NoticePayload),
-    Request(RequestPayload),
-}
-impl BusPayload {
-    pub fn parse(json: &str) -> Option<Self> { serde_json::from_str(json).ok() }
-}
-```
-
-## 步骤 6：实现 Bot 封装
-
-```rust
-pub struct Bot;
-impl Bot {
-    pub fn send_group_msg(group_id: u64, message: &str) -> Option<()> {
-        // 构造 JSON → Bus::topic("luo9_send").publish(json)
-    }
-    pub fn send_private_msg(user_id: u64, message: &str) -> Option<()> { /* 同理 */ }
-}
-```
-
-## 步骤 7：实现版本查询
-
-宿主启动时会查询插件版本，SDK 需要提供响应机制：
-
-```rust
-pub fn is_version_query(json: &str) -> bool {
-    // 检查 action == "query"
-}
-
-pub fn reply_version(name: &str, version: &str) {
-    // 发送到 luo9_version_reply topic
-}
-```
+插件必须导出 `plugin_main` 函数。宿主在独立线程里调用它。
 
 ## 参考实现
 
-- [Rust SDK](/sdk/rust) — 完整参考实现（`sdk/rust/`）
-- [FFI 接口规范](/sdk/ffi-interface) — 所有 FFI 函数的详细说明
-
-## 注意事项
-
-1. **字符串内存管理**：`luo9_bus_pop`、`luo9_bus_wait_pop`、`luo9_command_*` 返回的字符串必须用对应的 free 函数释放
-2. **线程安全**：Bus 函数是线程安全的，但每个 subscriber 应在单线程中使用
-3. **错误处理**：所有函数都有错误返回值，应妥善处理
-4. **取消订阅**：收到 sentinel 消息 `__luo9_unsubscribed__` 时应退出循环
+- [Rust SDK](/sdk/rust) — 完整参考，看看 Rust 是怎么包装的
+- [FFI 接口规范](/sdk/ffi-interface) — 所有函数的签名和返回值

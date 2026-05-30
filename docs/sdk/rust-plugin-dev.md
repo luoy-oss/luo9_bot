@@ -1,27 +1,32 @@
 # Rust 插件开发指南
 
-本指南面向**插件开发者**，说明如何用 Rust 编写 luo9_bot 插件。
+## 开始之前
 
-## 快速开始
+你需要：
+- Rust 工具链（1.75+，推荐 rustup 安装）
+- 一个能跑的洛玖机器人（参考 [快速开始](/guide/getting-started)）
 
-### 方式一：使用模板仓库（推荐）
+准备好了？继续往下看。
+
+## 从模板开始
+
+最快的方式是用模板仓库：
 
 ```bash
 git clone https://github.com/luo9-bot/luo9_sdk_rust.git my_plugin
 cd my_plugin
-# 修改 Cargo.toml 中的 name 和 description
 ```
 
-模板仓库已配置好 `crate-type = ["cdylib"]` 和 `luo9_sdk` 依赖，可以直接开始编写插件代码。
+模板已经帮你配好了 `Cargo.toml` 和 `crate-type = ["cdylib"]`，直接写代码就行。
 
-### 方式二：从零创建
+如果你想从零开始，也可以：
 
 ```bash
 cargo new --lib my_plugin
 cd my_plugin
 ```
 
-### 2. 配置 Cargo.toml
+然后手动配置 `Cargo.toml`：
 
 ```toml
 [package]
@@ -30,183 +35,105 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib"]   # 必须：生成 DLL/SO 共享库
+crate-type = ["cdylib"]   # 必须，不然编译不出 DLL/SO
 
 [dependencies]
-luo9_sdk = "0.7.1"         # 从 crates.io 安装
+luo9_sdk = "0.7.1"
 serde_json = "1.0"
 ```
 
-**关键**：`crate-type = ["cdylib"]` 必须设置，否则不会生成 `.dll` / `.so` 文件。
+## 第一个插件
 
-### 3. 编写插件
+打开 `src/lib.rs`，写入：
 
 ```rust
-// src/lib.rs
 use luo9_sdk::bus::Bus;
 use luo9_sdk::payload::*;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn plugin_main() {
-    // 订阅需要的 topic
+    // 订阅消息
     let msg_sub = Bus::topic("luo9_message").subscribe().unwrap();
     let msg_topic = Bus::topic("luo9_message");
 
     loop {
-        // 非阻塞取消息
+        // 有消息就处理
         if let Some(json) = msg_topic.pop(msg_sub) {
             if let Some(BusPayload::Message(msg)) = BusPayload::parse(&json) {
-                // 处理消息
                 eprintln!("收到消息: {}", msg.message);
             }
         }
-        // 短暂让出 CPU，避免空转
+        // 别忘了让出 CPU，不然会空转
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
 ```
 
-### 4. 编译
+编译：
 
 ```bash
 cargo build --release
 ```
 
-输出文件：
-- Windows: `target/release/my_plugin.dll`
-- Linux: `target/release/libmy_plugin.so`
+把生成的 `target/release/my_plugin.dll`（或 `libmy_plugin.so`）丢到宿主的 `plugins/` 目录，重启机器人，就能在日志里看到你的插件在工作了。
 
-### 5. 部署
+## 几个重要的事
 
-将编译产物复制到宿主的 `plugins/` 目录。
+### 不要调用 Bus::init()
 
-## 插件入口
+宿主在加载插件之前已经初始化好了总线。你再调一次会怎样？不会怎样，但没必要。
 
-插件必须导出 `plugin_main` 函数：
+### 用 pop，别用 wait_pop
 
-```rust
-#[unsafe(no_mangle)]
-pub extern "C" fn plugin_main() {
-    // 你的代码
-}
-```
+`wait_pop` 会阻塞当前线程直到有消息。如果你只订阅一个 topic，用它没问题。但大多数插件需要订阅多个 topic，这时候用 `pop`（非阻塞）+ `sleep` 轮询是更实际的做法。
 
-- 宿主在**独立 OS 线程**中调用此函数
-- panic 会被 `catch_unwind` 捕获，不会导致宿主崩溃
-- 函数返回后线程结束
+### 记得处理版本查询
 
-## 重要：不要调用 Bus::init()
-
-宿主在加载插件之前已经初始化了总线。插件**不需要**也**不应该**调用 `Bus::init()`。
-
-## 多 Topic 处理模式
-
-实际插件通常需要订阅多个 topic。推荐使用 `pop`（非阻塞）+ `sleep` 轮询：
+宿主启动时会问每个插件"你是谁"。不回答也没事，但回答了能在 WebUI 里看到插件版本：
 
 ```rust
-#[unsafe(no_mangle)]
-pub extern "C" fn plugin_main() {
-    // 订阅所有需要的 topic
-    let msg_sub = Bus::topic("luo9_message").subscribe().unwrap();
-    let event_sub = Bus::topic("luo9_meta_event").subscribe().unwrap();
-    let notice_sub = Bus::topic("luo9_notice").subscribe().unwrap();
-    let task_sub = Bus::topic("luo9_task").subscribe().unwrap();
-    let ver_sub = Bus::topic("luo9_version").subscribe().unwrap();
+use luo9_sdk::version;
 
-    let msg_topic = Bus::topic("luo9_message");
-    let event_topic = Bus::topic("luo9_meta_event");
-    let notice_topic = Bus::topic("luo9_notice");
-    let task_topic = Bus::topic("luo9_task");
-    let ver_topic = Bus::topic("luo9_version");
-
-    loop {
-        // 消息
-        if let Some(json) = msg_topic.pop(msg_sub) {
-            if let Some(BusPayload::Message(msg)) = BusPayload::parse(&json) {
-                // 处理消息...
-            }
-        }
-
-        // 元事件
-        if let Some(json) = event_topic.pop(event_sub) {
-            if let Some(BusPayload::MetaEvent(ev)) = BusPayload::parse(&json) {
-                // 处理元事件...
-            }
-        }
-
-        // 通知
-        if let Some(json) = notice_topic.pop(notice_sub) {
-            if let Some(BusPayload::Notice(notice)) = BusPayload::parse(&json) {
-                // 处理通知...
-            }
-        }
-
-        // 定时任务事件
-        if let Some(json) = task_topic.pop(task_sub) {
-            // 处理任务事件...
-        }
-
-        // 版本查询
-        if let Some(json) = ver_topic.pop(ver_sub) {
-            if luo9_sdk::version::is_version_query(&json) {
-                luo9_sdk::version::reply_version(
-                    env!("CARGO_PKG_NAME"),
-                    env!("CARGO_PKG_VERSION"),
-                );
-            }
-        }
-
-        // 短暂让出 CPU，避免空转
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-}
-```
-
-## 版本查询
-
-宿主启动时会向 `luo9_version` topic 发送查询，插件需要响应：
-
-```rust
-// 订阅版本查询 topic
-let ver_sub = Bus::topic("luo9_version").subscribe().unwrap();
-let ver_topic = Bus::topic("luo9_version");
-
-// 在循环中处理
+// 在循环里加一段
 if let Some(json) = ver_topic.pop(ver_sub) {
-    if luo9_sdk::version::is_version_query(&json) {
-        luo9_sdk::version::reply_version(
-            env!("CARGO_PKG_NAME"),    // 插件名
-            env!("CARGO_PKG_VERSION"), // 插件版本
-        );
+    if version::is_version_query(&json) {
+        version::reply_version(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 }
 ```
 
 ## 发送消息
 
+收到消息后，你通常想回复点什么：
+
 ```rust
 use luo9_sdk::Bot;
 use std::ffi::CString;
 
-// 发送群消息
+// 回复群消息
 Bot::send_group_msg(group_id, CString::new("你好！").unwrap());
 
-// 发送私聊消息
+// 回复私聊
 Bot::send_private_msg(user_id, CString::new("你好！").unwrap());
 ```
 
 ## 命令解析
 
+做机器人少不了命令处理。SDK 提供了 `Command` 来帮你解析：
+
 ```rust
 use luo9_sdk::command::{Command, PrefixMode};
 
-// 解析 /echo hello world
+// 解析 "/echo hello world"
 if let Some(cmd) = Command::parse(&msg.message, "echo", PrefixMode::Required('/')) {
     let text = cmd.args().join(" ");
     Bot::send_group_msg(group_id, CString::new(text).unwrap());
 }
+```
 
-// 链式匹配多个子命令
+多个子命令？用链式匹配：
+
+```rust
 if let Some(cmd) = Command::parse(&msg.message, "task", PrefixMode::Required('/')) {
     cmd.on("start", |args| {
         // /task start ...
@@ -215,74 +142,63 @@ if let Some(cmd) = Command::parse(&msg.message, "task", PrefixMode::Required('/'
         // /task stop ...
     })
     .otherwise(|| {
-        // /task （无参数或其他）
+        // /task （啥也没跟）
     });
 }
 ```
 
 ## 消息构建器
 
-使用 `Msg` 链式 API 构建包含 CQ 码的消息：
+想发 @某人 + 图片这种复杂消息？用 `Msg`：
 
 ```rust
 use luo9_sdk::Msg;
 
-// 构建 @某人 + 文本 + 图片
-let msg = Msg::txt("你好 ")
-    .at(123456)
-    .endl()
-    .image("https://example.com/image.jpg")
-    .build();
+let msg = Msg::txt("看看这个 ")
+    .at(123456)           // @某人
+    .endl()               // 换行
+    .image("https://example.com/pic.jpg")
+    .build();             // 构建为 CString
 
 Bot::send_group_msg(group_id, msg);
 ```
 
 ## 定时任务
 
+想让插件定期做点事情？
+
 ```rust
 use luo9_sdk::bus::Bus;
 use serde_json::json;
 
-// 发布定时任务请求（发到 luo9_task_miso）
+// 创建任务（发到 luo9_task_miso）
 let req = json!({
     "action": "schedule",
-    "task_name": "my_task",
-    "cron": "0 */5 * * * *",   // 每 5 分钟
-    "payload": "hello"
+    "task_name": "daily_report",
+    "cron": "0 0 9 * * *",    // 每天早上 9 点
+    "payload": "日报时间到"
 });
 Bus::topic("luo9_task_miso").publish(&req.to_string()).unwrap();
-
-// 取消任务
-let cancel = json!({
-    "action": "cancel",
-    "task_name": "my_task"
-});
-Bus::topic("luo9_task_miso").publish(&cancel.to_string()).unwrap();
-
-// 接收任务事件（从 luo9_task）
-// 事件格式: {"event":"tick","task_name":"my_task","payload":"hello"}
 ```
 
-**注意**：任务请求发到 `luo9_task_miso`，任务事件从 `luo9_task` 接收。
+任务触发后，你会从 `luo9_task` 收到事件：
 
-## Topic 一览
+```json
+{"event": "tick", "task_name": "daily_report", "payload": "日报时间到"}
+```
 
-| Topic | 方向 | 用途 |
-|---|---|---|
-| `luo9_message` | Host → Plugin | QQ 消息 |
-| `luo9_meta_event` | Host → Plugin | 元事件（心跳/生命周期） |
-| `luo9_notice` | Host → Plugin | 通知事件 |
-| `luo9_request` | Host → Plugin | 请求事件 |
-| `luo9_task` | Host → Plugin | 定时任务事件（tick） |
-| `luo9_task_miso` | Plugin → Host | 定时任务请求（schedule/cancel） |
-| `luo9_send` | Plugin → Host | 消息发送（SDK 内部使用） |
-| `luo9_version` | Host → Plugin | 版本查询 |
-| `luo9_version_reply` | Plugin → Host | 版本响应（SDK 内部使用） |
+取消任务：
+
+```rust
+let cancel = json!({ "action": "cancel", "task_name": "daily_report" });
+Bus::topic("luo9_task_miso").publish(&cancel.to_string()).unwrap();
+```
 
 ## 完整示例：Echo 插件
 
+一个完整的插件大概长这样：
+
 ```rust
-// src/lib.rs
 use luo9_sdk::Bot;
 use luo9_sdk::bus::Bus;
 use luo9_sdk::command::{Command, PrefixMode};
@@ -312,12 +228,8 @@ pub extern "C" fn plugin_main() {
         if let Some(json) = msg_topic.pop(msg_sub) {
             if let Some(BusPayload::Message(msg)) = BusPayload::parse(&json) {
                 match msg.message_type {
-                    MsgType::Group => {
-                        handle_group_msg(msg.group_id.unwrap_or(0), &msg.message);
-                    }
-                    MsgType::Private => {
-                        handle_private_msg(msg.user_id, &msg.message);
-                    }
+                    MsgType::Group => handle_group_msg(msg.group_id.unwrap_or(0), &msg.message),
+                    MsgType::Private => handle_private_msg(msg.user_id, &msg.message),
                     _ => {}
                 }
             }
@@ -325,10 +237,7 @@ pub extern "C" fn plugin_main() {
 
         if let Some(json) = ver_topic.pop(ver_sub) {
             if luo9_sdk::version::is_version_query(&json) {
-                luo9_sdk::version::reply_version(
-                    env!("CARGO_PKG_NAME"),
-                    env!("CARGO_PKG_VERSION"),
-                );
+                luo9_sdk::version::reply_version(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
             }
         }
 
@@ -339,22 +248,16 @@ pub extern "C" fn plugin_main() {
 
 ## 常见问题
 
-### 插件不加载
+**插件不加载？**
+- 检查 `Cargo.toml` 有没有 `crate-type = ["cdylib"]`
+- 检查有没有导出 `plugin_main`，有没有加 `#[unsafe(no_mangle)]`
+- 看宿主日志，通常会告诉你哪里出了问题
 
-1. 确认 `crate-type = ["cdylib"]` 已设置
-2. 确认导出了 `plugin_main` 函数
-3. 确认使用了 `#[unsafe(no_mangle)]`
-4. 检查日志中的加载错误信息
+**收不到消息？**
+- 确认订阅了正确的 topic
+- 确认用的是 `pop` 而不是 `wait_pop`（多 topic 场景）
+- 确认循环里有 `sleep`，不然线程会疯狂空转
 
-### 插件收不到消息
-
-1. 确认订阅了正确的 topic
-2. 确认使用 `pop` 而非 `wait_pop`（多 topic 场景）
-3. 确认调用了 `std::thread::sleep` 避免空转
-
-### 编译错误：找不到 luo9_sdk
-
-确认 `Cargo.toml` 中的依赖版本正确：
-```toml
-luo9_sdk = "0.7.1"
-```
+**编译报错找不到 luo9_sdk？**
+- 确认 `Cargo.toml` 里写了 `luo9_sdk = "0.7.1"`
+- 跑一下 `cargo update`

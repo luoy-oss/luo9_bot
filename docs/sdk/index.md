@@ -1,88 +1,71 @@
 # 介绍
 
-## 概述
+## 整体结构
 
-luo9_bot 的插件系统基于 FFI 消息总线设计：
-
-1. **核心库（luo9_core）** 提供底层 `extern "C"` 函数
-2. **SDK** 封装这些函数，提供各语言的惯用 API
-3. **插件** 使用 SDK 编写业务逻辑
-
-## 架构
+洛玖的插件系统分三层：
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    插件（你的代码）                    │
-├─────────────────────────────────────────────────────┤
-│                  SDK（语言封装层）                     │
-├─────────────────────────────────────────────────────┤
-│            luo9_core.dll / libluo9_core.so           │
-│                  FFI 接口层                           │
-├─────────────────────────────────────────────────────┤
-│                   宿主（luo9_bot）                    │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│              你的插件                     │
+├─────────────────────────────────────────┤
+│              SDK                         │
+├─────────────────────────────────────────┤
+│              luo9_core（FFI 层）          │
+├─────────────────────────────────────────┤
+│              宿主（luo9_bot）             │
+└─────────────────────────────────────────┘
 ```
 
-## 快速开始
+**宿主**负责连接 Napcat、接收消息、分发给插件、发送回复。
 
-想直接开始写插件？根据你使用的语言选择对应的指南：
+**核心库（luo9_core）**是一个 C 动态库，提供消息总线和命令解析的底层函数。它不关心你用什么语言，只暴露 `extern "C"` 接口。
 
-- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 官方 SDK，完整支持
+**SDK** 是核心库的语言封装。它把 C 接口包装成你熟悉的 API —— 在 Rust 里是 `Bus::topic("luo9_message")`，在 Python 里是 `Bus.topic("luo9_message")`。
 
-## 核心概念
+**插件**是你写的代码。它通过 SDK 订阅消息、处理逻辑、发送回复。
 
-### Bus 消息总线
+## 消息怎么流动
 
-所有通信通过消息总线进行：
+所有通信都通过**消息总线（Bus）**进行。你可以把它想象成一个邮局：
 
-- **Topic**：消息主题，如 `luo9_message`、`luo9_send`
-- **Subscriber**：订阅者，每个插件在每个 topic 上有独立的 subscriber
-- **Publish**：发布消息到 topic
-- **Pop**：从 subscriber 队列取消息
+- **Topic** 是信箱的名字，比如 `luo9_message`、`luo9_send`
+- **Subscriber** 是每个插件在每个信箱上的专属格子
+- **Publish** 是往信箱里投信
+- **Pop** 是从格子里取信
 
-详见 [Bus 消息总线](/sdk/bus)。
+宿主收到 QQ 消息后，把它投进 `luo9_message` 信箱。插件从自己的格子里取出消息，处理后把回复投进 `luo9_send` 信箱。宿主再从 `luo9_send` 取出来发给 Napcat。
 
-### Topic 一览
+## Topic 一览
 
 | Topic | 方向 | 用途 |
 |---|---|---|
-| `luo9_message` | Host → Plugin | QQ 消息（私聊/群聊） |
-| `luo9_meta_event` | Host → Plugin | 元事件（心跳/生命周期） |
-| `luo9_notice` | Host → Plugin | 通知事件（好友/群变动等） |
-| `luo9_request` | Host → Plugin | 请求事件（好友请求/群请求） |
-| `luo9_task` | Host → Plugin | 定时任务事件（tick 下发） |
-| `luo9_task_miso` | Plugin → Host | 定时任务请求（schedule/cancel） |
-| `luo9_send` | Plugin → Host | 消息发送请求 |
-| `luo9_version` | Host → Plugin | 版本查询请求 |
-| `luo9_version_reply` | Plugin → Host | 版本查询响应 |
+| `luo9_message` | 宿主 → 插件 | QQ 消息 |
+| `luo9_meta_event` | 宿主 → 插件 | 心跳、生命周期 |
+| `luo9_notice` | 宿主 → 插件 | 好友/群变动通知 |
+| `luo9_request` | 宿主 → 插件 | 好友/群请求 |
+| `luo9_task` | 宿主 → 插件 | 定时任务触发 |
+| `luo9_task_miso` | 插件 → 宿主 | 创建/取消定时任务 |
+| `luo9_send` | 插件 → 宿主 | 请求发送消息 |
+| `luo9_version` | 宿主 → 插件 | 版本查询 |
+| `luo9_version_reply` | 插件 → 宿主 | 版本响应 |
 
-### 插件入口
+## 插件入口
 
-插件必须导出 `plugin_main` 函数：
+每个插件必须导出一个 `plugin_main` 函数：
 
-```c
-extern "C" void plugin_main();
+```rust
+#[unsafe(no_mangle)]
+pub extern "C" fn plugin_main() {
+    // 你的代码从这里开始
+}
 ```
 
-宿主在独立线程中调用此函数，panic 会被 `catch_unwind` 捕获。
+宿主会在独立线程里调用它。如果 panic 了，宿主会捕获，不会带崩整个机器人。
 
-### 预分配 Subscriber
+## 想写插件？
 
-宿主在加载插件时为每个 topic 创建 subscriber，通过 `luo9_init_subscribers` 传递：
+- [Rust 插件开发指南](/sdk/rust-plugin-dev) — 从模板开始，10 分钟写好第一个插件
 
-```c
-typedef struct {
-    int message_sub_id;
-    int meta_event_sub_id;
-    int notice_sub_id;
-    int request_sub_id;
-    int task_sub_id;
-    int send_sub_id;
-} PluginSubscribers;
-```
+## 想开发新语言的 SDK？
 
-SDK 调用 `Bus::topic("luo9_message").subscribe()` 时应优先检查预分配 ID。
-
-## 想开发新 SDK？
-
-如果你希望为其他语言开发 SDK，请查看 [开发新 SDK](/sdk/dev-new-sdk)。
+- [开发新 SDK](/sdk/dev-new-sdk) — 说明需要对接哪些 FFI 接口
