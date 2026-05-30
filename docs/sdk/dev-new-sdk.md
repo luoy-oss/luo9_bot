@@ -79,5 +79,5 @@ void luo9_init_subscribers(const PluginSubscribers* subscribers);
 
 ## 参考实现
 
-- [Rust SDK](/sdk/rust) — 完整参考，看看 Rust 是怎么包装的
+- [Rust SDK](/sdk/rust/) — 完整参考，看看 Rust 是怎么包装的
 - [FFI 接口规范](/sdk/ffi-interface) — 所有函数的签名和返回值
