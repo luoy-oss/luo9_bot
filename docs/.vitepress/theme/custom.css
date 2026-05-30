@@ -1,0 +1,131 @@
+/* 温柔风格主题 */
+
+:root {
+  /* 主色调 - 柔和的粉色系 */
+  --vp-c-brand-1: #e8889e;
+  --vp-c-brand-2: #d4708a;
+  --vp-c-brand-3: #c25a78;
+  --vp-c-brand-soft: rgba(232, 136, 158, 0.14);
+
+  /* 背景色 - 温暖的米白 */
+  --vp-c-bg: #fdf8f6;
+  --vp-c-bg-alt: #f9f1ed;
+  --vp-c-bg-elv: #fef5f2;
+  --vp-c-bg-soft: #f5ebe7;
+
+  /* 文字色 - 柔和的深灰 */
+  --vp-c-text-1: #3d2e2e;
+  --vp-c-text-2: #6b5252;
+  --vp-c-text-3: #9c8282;
+
+  /* 边框色 */
+  --vp-c-border: #e8d8d4;
+  --vp-c-divider: #f0e0dc;
+  --vp-c-gutter: #f5e8e4;
+
+  /* 链接 */
+  --vp-c-link: #d4708a;
+
+  /* 侧边栏 */
+  --vp-sidebar-bg-color: #fdf8f6;
+
+  /* 按钮 */
+  --vp-button-brand-bg: #e8889e;
+  --vp-button-brand-hover-bg: #d4708a;
+  --vp-button-brand-text: #fff;
+
+  /* Hero 区域 */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #e8889e 30%, #f4b8c8);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 50%, #e8889e 100%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+/* 暗色模式 */
+.dark {
+  --vp-c-brand-1: #f4a0b4;
+  --vp-c-brand-2: #e8889e;
+  --vp-c-brand-3: #d4708a;
+  --vp-c-brand-soft: rgba(244, 160, 180, 0.14);
+
+  --vp-c-bg: #1a1214;
+  --vp-c-bg-alt: #22181c;
+  --vp-c-bg-elv: #2a1e22;
+  --vp-c-bg-soft: #261a1e;
+
+  --vp-c-text-1: #f0e0e4;
+  --vp-c-text-2: #c8a8b0;
+  --vp-c-text-3: #9a7880;
+
+  --vp-c-border: #3a2830;
+  --vp-c-divider: #302228;
+  --vp-c-gutter: #2a1e22;
+
+  --vp-sidebar-bg-color: #1a1214;
+
+  --vp-button-brand-bg: #d4708a;
+  --vp-button-brand-hover-bg: #e8889e;
+
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #f4a0b4 30%, #e8889e);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, #2a1e22 0%, #3a2830 50%, #4a3840 100%);
+}
+
+/* 自定义首页 Hero */
+.VPHero .name {
+  font-weight: 700;
+}
+
+.VPHero .text {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* 侧边栏样式 */
+.VPSidebar .group .title {
+  font-weight: 600;
+}
+
+/* 链接下划线效果 */
+.vp-doc a {
+  text-decoration-color: var(--vp-c-brand-soft);
+  text-underline-offset: 4px;
+}
+
+.vp-doc a:hover {
+  text-decoration-color: var(--vp-c-brand-1);
+}
+
+/* 提示框样式 */
+.vp-doc .tip {
+  border-color: var(--vp-c-brand-1);
+}
+
+/* 代码块 */
+.vp-doc div[class*="language-"] {
+  border-radius: 12px;
+}
+
+/* 表格 */
+.vp-doc table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vp-c-brand-soft);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-brand-1);
+}
