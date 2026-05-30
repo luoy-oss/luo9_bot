@@ -15,7 +15,7 @@ export default defineConfig({
 
     nav: [
       { text: '指南', link: '/guide/' },
-      { text: 'SDK', link: '/sdk/' },
+      { text: '插件开发', link: '/sdk/' },
       { text: 'API', link: '/api/' },
       {
         text: '相关链接',
@@ -27,46 +27,9 @@ export default defineConfig({
     ],
 
     sidebar: {
-      '/': [
-        {
-          text: '使用洛玖',
-          items: [
-            { text: '快速开始', link: '/guide/getting-started' },
-            { text: '配置说明', link: '/guide/configuration' },
-            { text: 'WebUI', link: '/guide/webui' },
-            { text: '部署', link: '/guide/deployment' },
-          ]
-        },
-        {
-          text: 'Rust 插件开发',
-          items: [
-            { text: '入门', link: '/sdk/rust/' },
-            { text: '消息处理', link: '/sdk/rust/messages' },
-            { text: '命令解析', link: '/sdk/rust/commands' },
-            { text: '定时任务', link: '/sdk/rust/tasks' },
-            { text: '技巧与常见问题', link: '/sdk/rust/tips' },
-            { text: 'SDK API 速查', link: '/sdk/rust/api' },
-          ]
-        },
-        {
-          text: 'API 参考',
-          items: [
-            { text: 'WebUI API', link: '/api/webui' },
-            { text: '事件类型', link: '/api/events' },
-          ]
-        },
-        {
-          text: '进阶',
-          items: [
-            { text: '插件系统原理', link: '/guide/plugin-system' },
-            { text: 'FFI 接口规范', link: '/sdk/ffi-interface' },
-            { text: '开发新 SDK', link: '/sdk/dev-new-sdk' },
-          ]
-        }
-      ],
       '/guide/': [
         {
-          text: '入门',
+          text: '开始洛玖之旅',
           items: [
             { text: '介绍', link: '/guide/' },
             { text: '快速开始', link: '/guide/getting-started' },
@@ -74,7 +37,7 @@ export default defineConfig({
           ]
         },
         {
-          text: '进阶',
+          text: '深入了解',
           items: [
             { text: '插件系统', link: '/guide/plugin-system' },
             { text: 'WebUI', link: '/guide/webui' },
@@ -84,9 +47,37 @@ export default defineConfig({
       ],
       '/sdk/': [
         {
-          text: '开始洛玖之旅',
+          text: '开发插件',
           items: [
-            { text: '介绍', link: '/sdk/' },
+            { text: '概述', link: '/sdk/' },
+          ]
+        },
+        {
+          text: 'Rust',
+          items: [
+            { text: '入门', link: '/sdk/rust/' },
+            { text: '消息处理', link: '/sdk/rust/messages' },
+            { text: '命令解析', link: '/sdk/rust/commands' },
+            { text: '定时任务', link: '/sdk/rust/tasks' },
+            { text: '技巧与常见问题', link: '/sdk/rust/tips' },
+            { text: 'API 速查', link: '/sdk/rust/api' },
+          ]
+        },
+        {
+          text: 'C++ (即将推出)',
+          items: [
+            { text: '入门', link: '/sdk/cpp/' },
+          ]
+        },
+        {
+          text: 'Python (即将推出)',
+          items: [
+            { text: '入门', link: '/sdk/python/' },
+          ]
+        },
+        {
+          text: 'SDK 参考',
+          items: [
             { text: 'FFI 接口规范', link: '/sdk/ffi-interface' },
             { text: 'Bus 消息总线', link: '/sdk/bus' },
             { text: 'Command 命令解析', link: '/sdk/command' },
@@ -94,20 +85,9 @@ export default defineConfig({
           ]
         },
         {
-          text: '开发插件 — Rust',
-          items: [
-            { text: '入门', link: '/sdk/rust/' },
-            { text: '消息处理', link: '/sdk/rust/messages' },
-            { text: '命令解析', link: '/sdk/rust/commands' },
-            { text: '定时任务', link: '/sdk/rust/tasks' },
-            { text: '技巧与常见问题', link: '/sdk/rust/tips' },
-          ]
-        },
-        {
-          text: '进阶开发',
+          text: '进阶',
           items: [
             { text: '开发新 SDK', link: '/sdk/dev-new-sdk' },
-            { text: 'Rust SDK API', link: '/sdk/rust/api' },
           ]
         }
       ],
