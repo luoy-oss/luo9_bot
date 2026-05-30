@@ -1,0 +1,13 @@
+{
+  "name": "luo9-bot-docs",
+  "version": "1.0.0",
+  "description": "洛玖机器人官方文档",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}
