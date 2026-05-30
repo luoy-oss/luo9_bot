@@ -10,7 +10,7 @@ export default defineConfig({
   ],
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/favicon.ico',
     siteTitle: 'luo9_bot',
 
     nav: [
