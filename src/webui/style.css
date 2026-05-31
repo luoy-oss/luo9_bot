@@ -626,6 +626,17 @@ body {
   border-color: var(--accent);
 }
 
+.btn-update {
+  border-color: rgba(76, 175, 80, 0.3);
+  color: #2e7d32;
+}
+
+.btn-update:hover {
+  background: #4caf50;
+  color: white;
+  border-color: #4caf50;
+}
+
 .btn-sm {
   padding: 4px 10px;
   font-size: 0.72em;

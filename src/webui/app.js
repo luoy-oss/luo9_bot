@@ -347,6 +347,7 @@
     list.innerHTML = filtered.map((p, i) => {
       const tagsHtml = (p.tags || []).map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(' ');
       const installed = p.installed;
+      const hasUpdate = p.has_update;
       const sdkVer = p.sdk_version || '';
       const ghUrl = `https://github.com/${p.repo}`;
       const versions = p.versions || [];
@@ -361,12 +362,19 @@
         versionSelect = `<select class="version-select" id="ver-${esc(p.name)}">${options}</select>`;
       }
 
-      const installBtn = installed
-        ? '<span class="badge badge-on">已安装</span>'
-        : (hasMultipleVersions
+      // 根据状态显示不同按钮
+      let actionBtn = '';
+      if (installed) {
+        if (hasUpdate) {
+          actionBtn = `<button class="btn btn-sm btn-update" onclick="updatePlugin('${esc(p.name)}')">更新</button>`;
+        } else {
+          actionBtn = '<span class="badge badge-on">已安装</span>';
+        }
+      } else {
+        actionBtn = hasMultipleVersions
           ? `${versionSelect}<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}', true)">安装</button>`
-          : `<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}')">安装</button>`
-        );
+          : `<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}')">安装</button>`;
+      }
 
       return `
         <div class="plugin-item" style="animation-delay:${i * 0.05}s">
@@ -380,7 +388,7 @@
           </div>
           <div class="plugin-meta">
             <span class="badge badge-ver">v${esc(p.latest_version)}</span>
-            ${installBtn}
+            ${actionBtn}
             <a class="gh-link" href="${ghUrl}" target="_blank" title="GitHub">🔗</a>
           </div>
         </div>
@@ -500,6 +508,35 @@
       } else {
         btn.disabled = false;
         btn.textContent = '安装';
+      }
+    } catch (e) {
+      showToast('请求失败: ' + e.message, false);
+    }
+  };
+
+  window.updatePlugin = async function (name) {
+    const ok = await showConfirm('更新插件', `确定要更新插件 ${name} 到最新版本吗？`);
+    if (!ok) return;
+
+    try {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '更新中...';
+
+      // 显示下载进度面板
+      showDownloadProgress(name);
+
+      const resp = await fetch(apiUrl(`/api/plugins/${encodeURIComponent(name)}/update`), { method: 'POST' });
+      const data = await resp.json();
+      showToast(data.message, data.ok);
+
+      if (data.ok) {
+        refreshInstalled();
+        refreshStore();
+        refreshStatus();
+      } else {
+        btn.disabled = false;
+        btn.textContent = '更新';
       }
     } catch (e) {
       showToast('请求失败: ' + e.message, false);
