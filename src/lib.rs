@@ -44,6 +44,21 @@ impl LNContext {
         let config: LNConfig = LNConfig::load()?;
         utils::logger::init(&config.logging.level);
 
+        // 设置 panic hook，防止插件 panic 导致进程崩溃
+        // 插件是 extern "C" 函数，catch_unwind 无法捕获跨越 FFI 边界的 panic
+        std::panic::set_hook(Box::new(|panic_info| {
+            let location = panic_info.location()
+                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                .unwrap_or_else(|| "unknown".to_string());
+            let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown error".to_string()
+            };
+            tracing::error!("插件 panic at {}: {}", location, message);
+        }));
 
         info!("当前核心版本: luo9_core < {} >", luo9_sdk::Bot::get_version());
 
