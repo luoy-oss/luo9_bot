@@ -10,6 +10,7 @@
   let autoScroll = true;
   let storeData = [];
   let activeTag = 'all';
+  let showBeta = false;
   let confirmResolve = null;
   let authToken = null;
 
@@ -124,8 +125,13 @@
       // 更新启动时间戳
       startTimestamp = data.start_timestamp;
       updateLocalUptime();
-      document.getElementById('stat-plugins').textContent = data.plugin_count;
-      document.getElementById('stat-dir').textContent = data.plugin_dir;
+
+      // 更新插件数量和目录（这些元素可能不存在）
+      const statPlugins = document.getElementById('stat-plugins');
+      if (statPlugins) statPlugins.textContent = data.plugin_count;
+      const statDir = document.getElementById('stat-dir');
+      if (statDir) statDir.textContent = data.plugin_dir;
+
       const verEl = document.getElementById('bot-version');
       if (verEl) {
         const bot = data.bot_version || '?';
@@ -288,7 +294,8 @@
     empty.style.display = 'none';
 
     try {
-      const resp = await fetch(apiUrl('/api/registry'));
+      const url = showBeta ? '/api/registry?include_beta=true' : '/api/registry';
+      const resp = await fetch(apiUrl(url));
       if (!resp.ok) {
         throw new Error('HTTP ' + resp.status);
       }
@@ -306,6 +313,16 @@
       storeData.forEach(p => (p.tags || []).forEach(t => allTags.add(t)));
       renderTagFilter(allTags);
       renderStoreList();
+
+      // 检查测试版获取状态
+      if (showBeta) {
+        const betaCount = storeData.filter(p => p.has_beta).length;
+        if (betaCount === 0) {
+          showToast('未找到测试版插件（GitHub API 访问可能受限）', false);
+        } else {
+          showToast(`找到 ${betaCount} 个有测试版的插件`, true);
+        }
+      }
     } catch (e) {
       loading.style.display = 'none';
       list.innerHTML = `<div class="empty"><div class="icon">⚠️</div><div>加载注册表失败: ${esc(e.message)}</div></div>`;
@@ -333,6 +350,23 @@
     });
   }
 
+  // 切换测试版显示
+  window.toggleBetaVersions = function () {
+    showBeta = document.getElementById('showBetaToggle').checked;
+    refreshStore();
+  };
+
+  // 通道类型图标
+  function channelIcon(channel) {
+    switch (channel) {
+      case 'beta': return '🧪';
+      case 'alpha': return '⚗️';
+      case 'rc': return '🔬';
+      case 'dev': return '🔧';
+      default: return '📦';
+    }
+  }
+
   function renderStoreList() {
     const list = document.getElementById('store-list');
     const filtered = activeTag === 'all'
@@ -348,17 +382,37 @@
       const tagsHtml = (p.tags || []).map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(' ');
       const installed = p.installed;
       const hasUpdate = p.has_update;
+      const hasBeta = p.has_beta;
       const sdkVer = p.sdk_version || '';
       const ghUrl = `https://github.com/${p.repo}`;
       const versions = p.versions || [];
-      const hasMultipleVersions = versions.length > 1;
+      const betaVersions = p.beta_versions || [];
+      const totalVersions = versions.length + betaVersions.length;
+      const hasMultipleVersions = totalVersions > 1;
 
-      // 版本选择下拉框
+      // 版本选择下拉框（支持稳定版和测试版分组）
       let versionSelect = '';
       if (hasMultipleVersions && !installed) {
-        const options = versions.map(v =>
-          `<option value="${esc(v.version)}">v${esc(v.version)} (SDK ${esc(v.sdk_version || '?')})</option>`
-        ).join('');
+        let options = '';
+
+        // 稳定版分组
+        if (versions.length > 0) {
+          options += '<optgroup label="稳定版">';
+          options += versions.map(v =>
+            `<option value="${esc(v.version)}">v${esc(v.version)} (SDK ${esc(v.sdk_version || '?')})</option>`
+          ).join('');
+          options += '</optgroup>';
+        }
+
+        // 测试版分组
+        if (showBeta && betaVersions.length > 0) {
+          options += '<optgroup label="测试版">';
+          options += betaVersions.map(v =>
+            `<option value="${esc(v.version)}">${channelIcon(v.channel)} v${esc(v.version)} (${esc(v.channel)})</option>`
+          ).join('');
+          options += '</optgroup>';
+        }
+
         versionSelect = `<select class="version-select" id="ver-${esc(p.name)}">${options}</select>`;
       }
 
@@ -376,11 +430,15 @@
           : `<button class="btn btn-sm btn-accent" onclick="installPlugin('${esc(p.name)}')">安装</button>`;
       }
 
+      // 测试版徽章
+      const betaBadge = hasBeta ? '<span class="beta-badge">测试版</span>' : '';
+
       return `
         <div class="plugin-item" style="animation-delay:${i * 0.05}s">
           <div class="plugin-info">
             <div class="plugin-name">
               ${esc(p.name)}
+              ${betaBadge}
               ${tagsHtml}
             </div>
             <div class="plugin-desc">${esc(p.description)}</div>
@@ -482,8 +540,18 @@
       if (sel) version = sel.value;
     }
 
+    // 检查是否为测试版
+    const isBeta = version.includes('alpha') || version.includes('beta') ||
+      version.includes('rc') || version.includes('dev');
+
     const verLabel = version ? ` v${version}` : '';
-    const ok = await showConfirm('安装插件', `确定要从注册表安装插件 ${name}${verLabel} 吗？`);
+    let confirmMsg = `确定要从注册表安装插件 ${name}${verLabel} 吗？`;
+
+    if (isBeta) {
+      confirmMsg = `⚠️ 即将安装测试版插件 ${name}${verLabel}\n\n测试版可能存在不稳定因素，是否继续？`;
+    }
+
+    const ok = await showConfirm('安装插件', confirmMsg);
     if (!ok) return;
 
     try {

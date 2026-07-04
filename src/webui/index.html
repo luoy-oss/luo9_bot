@@ -102,8 +102,17 @@
   <div class="tab-content" id="tab-store">
     <div class="section">
       <div class="section-title">🏷️ 分类筛选</div>
-      <div class="tag-filter" id="tag-filter">
-        <button class="tag-chip active" data-tag="all">全部</button>
+      <div class="store-filter-row">
+        <div class="tag-filter" id="tag-filter">
+          <button class="tag-chip active" data-tag="all">全部</button>
+        </div>
+        <div class="beta-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="showBetaToggle" onchange="toggleBetaVersions()">
+            <span class="toggle-slider"></span>
+            显示测试版
+          </label>
+        </div>
       </div>
     </div>
 

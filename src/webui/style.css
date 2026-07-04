@@ -708,6 +708,96 @@ body {
   box-shadow: 0 2px 8px rgba(240, 166, 200, 0.3);
 }
 
+/* ── Store Filter Row ──────────────────── */
+.store-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.store-filter-row .tag-filter {
+  margin-bottom: 0;
+}
+
+/* ── Beta Toggle ───────────────────────── */
+.beta-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  font-weight: 500;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  width: 2.5rem;
+  height: 1.25rem;
+  background: var(--border);
+  border-radius: var(--radius-full);
+  position: relative;
+  transition: background var(--transition-fast);
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  background: white;
+  border-radius: 50%;
+  top: 0.125rem;
+  left: 0.125rem;
+  transition: transform var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+}
+
+.toggle-label input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-label input:checked + .toggle-slider::after {
+  transform: translateX(1.25rem);
+}
+
+/* ── Beta Badge ────────────────────────── */
+.beta-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: 0.7em;
+  font-weight: 600;
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+/* ── Version Select Optgroup ───────────── */
+.version-select optgroup {
+  font-weight: 600;
+  color: var(--text);
+  font-style: normal;
+}
+
+.version-select option {
+  font-weight: normal;
+  padding: var(--space-1);
+}
+
 /* ── SDK Details ───────────────────────── */
 .sdk-toggle {
   cursor: pointer;

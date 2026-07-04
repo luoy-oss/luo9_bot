@@ -164,7 +164,7 @@ impl LNContext {
         for plugin_info in plugins {
             if plugin_info.active {
                 info!("正在禁用插件: {}", plugin_info.name);
-                match manager.disable_plugin(&plugin_info.name).await {
+                match manager.disable_plugin(&plugin_info.name, false).await {
                     Ok(msg) => info!("{}", msg),
                     Err(e) => warn!("禁用插件 {} 失败: {}", plugin_info.name, e),
                 }

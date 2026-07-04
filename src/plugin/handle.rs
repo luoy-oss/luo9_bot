@@ -56,4 +56,21 @@ impl PluginHandle {
             true
         }
     }
+
+    /// 强制等待插件线程退出（5秒超时，用于文件删除前）
+    ///
+    /// 返回 true 表示线程已退出，false 表示超时（线程被丢弃）
+    pub fn force_wait_exit(&mut self) -> bool {
+        if let Some(handle) = self.thread_handle.take() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = handle.join();
+                let _ = tx.send(());
+            });
+            // 5秒超时
+            rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok()
+        } else {
+            true
+        }
+    }
 }

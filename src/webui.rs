@@ -118,6 +118,47 @@ struct RegistryVersion {
     assets: HashMap<String, String>,
 }
 
+// ========== GitHub API 数据结构 ==========
+
+/// GitHub Release 信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    name: String,
+    prerelease: bool,
+    draft: bool,
+    published_at: String,
+    assets: Vec<GitHubAsset>,
+}
+
+/// GitHub Release Asset
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GitHubAsset {
+    name: String,
+    browser_download_url: String,
+    size: u64,
+}
+
+/// 测试版版本信息（从 GitHub Release 转换）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BetaVersion {
+    version: String,
+    tag: String,
+    channel: String,
+    sdk_version: String,
+    assets: HashMap<String, String>,
+    published_at: String,
+}
+
+/// GitHub API 缓存条目
+#[derive(Debug, Clone)]
+pub struct BetaCacheEntry {
+    releases: Vec<GitHubRelease>,
+    fetched_at: std::time::Instant,
+    /// GitHub API ETag（用于条件请求，减少数据传输）
+    etag: Option<String>,
+}
+
 // ========== WebUI 数据结构 ==========
 
 /// 下载进度事件
@@ -163,6 +204,8 @@ pub struct WebuiState {
     pub user_selected_mirror: Arc<RwLock<Option<String>>>,
     /// WebSocket 连接状态
     pub ws_connected: Arc<RwLock<bool>>,
+    /// GitHub API 缓存：repo → BetaCacheEntry
+    pub beta_cache: Arc<RwLock<HashMap<String, BetaCacheEntry>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -237,6 +280,10 @@ struct AvailablePlugin {
     has_update: bool,
     #[serde(default)]
     versions: Vec<RegistryVersion>,
+    #[serde(default)]
+    has_beta: bool,
+    #[serde(default)]
+    beta_versions: Vec<BetaVersion>,
 }
 
 /// 配置更新请求
@@ -314,6 +361,10 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     let mirror_cache = Arc::new(RwLock::new(None));
     let user_selected_mirror = Arc::new(RwLock::new(None));
 
+    // GitHub API 缓存
+    let beta_cache = Arc::new(RwLock::new(HashMap::new()));
+    let beta_cache_for_preload = beta_cache.clone();
+
     let state = Arc::new(WebuiState {
         plugin_dir,
         start_timestamp: std::time::SystemTime::now()
@@ -325,6 +376,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         mirror_cache: mirror_cache.clone(),
         user_selected_mirror: user_selected_mirror.clone(),
         ws_connected: Arc::new(RwLock::new(ws_connected)),
+        beta_cache,
     });
 
     // 启动镜像健康检查任务（后台预热）
@@ -340,6 +392,64 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         loop {
             interval.tick().await;
             check_mirrors_health(&cache_for_check).await;
+        }
+    });
+
+    // 启动测试版信息预加载任务（后台预热）
+    let mirror_cache_for_preload = mirror_cache.clone();
+    let user_selected_mirror_for_preload = user_selected_mirror.clone();
+    tokio::spawn(async move {
+        // 等待镜像健康检查完成
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        info!("开始预加载插件测试版信息...");
+
+        // 获取注册表
+        let available_mirrors = get_available_mirrors(
+            &mirror_cache_for_preload,
+            &user_selected_mirror_for_preload,
+            "raw"
+        ).await;
+
+        match fetch_registry_with_mirrors(&available_mirrors).await {
+            Ok(registry) => {
+                let total = registry.plugins.len();
+                let mut success = 0;
+                let mut failed = 0;
+                let mut rate_limited = false;
+
+                for (name, plugin) in &registry.plugins {
+                    // 如果遇到速率限制，停止预加载
+                    if rate_limited {
+                        warn!("遇到速率限制，跳过剩余插件预加载");
+                        break;
+                    }
+
+                    match fetch_beta_releases(&beta_cache_for_preload, &plugin.repo).await {
+                        Ok(releases) => {
+                            if !releases.is_empty() {
+                                info!("预加载测试版: {} ({}个)", name, releases.len());
+                            }
+                            success += 1;
+                        }
+                        Err(e) => {
+                            warn!("预加载测试版失败: {} - {}", name, e);
+                            failed += 1;
+                            // 如果是速率限制错误，标记并停止
+                            if e.contains("速率限制") {
+                                rate_limited = true;
+                            }
+                        }
+                    }
+                    // 避免触发速率限制，每个请求间隔 2秒
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+
+                info!("测试版预加载完成: 成功 {}/{}, 失败 {}", success, total, failed);
+            }
+            Err(e) => {
+                warn!("获取注册表失败，跳过测试版预加载: {}", e);
+            }
         }
     });
 
@@ -361,6 +471,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/plugins/{name}/update", post(api_plugin_update))
         .route("/api/plugins/{name}/priority", put(api_plugin_priority))
         .route("/api/plugins/{name}/block", put(api_plugin_block))
+        .route("/api/plugins/{name}/beta-releases", get(api_plugin_beta_releases))
         .route("/api/plugins/install/{name}", post(api_plugin_install))
         .route("/api/registry", get(api_registry))
         .route("/api/logs", get(api_logs))
@@ -734,7 +845,15 @@ async fn api_config_path() -> impl IntoResponse {
 
 // ========== 注册表 API ==========
 
-async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse {
+#[derive(Deserialize)]
+struct RegistryQuery {
+    include_beta: Option<bool>,
+}
+
+async fn api_registry(
+    State(state): State<Arc<WebuiState>>,
+    Query(q): Query<RegistryQuery>,
+) -> impl IntoResponse {
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
     let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
@@ -755,6 +874,8 @@ async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse
 
     // 读取已安装插件的版本信息
     let installed_versions = load_installed_versions(&state.plugin_dir);
+
+    let include_beta = q.include_beta.unwrap_or(false);
 
     let mut available: Vec<AvailablePlugin> = Vec::new();
     for (name, plugin) in &registry.plugins {
@@ -780,7 +901,7 @@ async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse
             false
         };
 
-        available.push(AvailablePlugin {
+        let mut available_plugin = AvailablePlugin {
             name: name.clone(),
             description: plugin.description.clone(),
             repo: plugin.repo.clone(),
@@ -791,12 +912,69 @@ async fn api_registry(State(state): State<Arc<WebuiState>>) -> impl IntoResponse
             installed_version,
             has_update,
             versions: plugin.versions.clone(),
-        });
+            has_beta: false,
+            beta_versions: Vec::new(),
+        };
+
+        // 如果请求包含测试版，从 GitHub API 获取
+        if include_beta {
+            match fetch_beta_releases(&state.beta_cache, &plugin.repo).await {
+                Ok(releases) => {
+                    let beta_versions: Vec<BetaVersion> = releases
+                        .iter()
+                        .map(convert_to_beta_version)
+                        .collect();
+                    available_plugin.has_beta = !beta_versions.is_empty();
+                    available_plugin.beta_versions = beta_versions;
+                }
+                Err(e) => {
+                    // 静默降级，不影响稳定版功能
+                    warn!("获取 {} 的测试版信息失败: {}", name, e);
+                }
+            }
+        }
+
+        available.push(available_plugin);
     }
 
     // 按名称排序
     available.sort_by(|a, b| a.name.cmp(&b.name));
     Json(available).into_response()
+}
+
+/// 获取指定插件的测试版 releases
+async fn api_plugin_beta_releases(
+    State(state): State<Arc<WebuiState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    // 获取可用镜像列表（优先用户选择，否则按延迟排序）
+    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
+
+    let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
+        Ok(r) => r,
+        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("获取注册表失败: {e}")).into_response(),
+    };
+
+    let plugin = match registry.plugins.get(&name) {
+        Some(p) => p,
+        None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 不在注册表中")).into_response(),
+    };
+
+    // 获取测试版信息
+    match fetch_beta_releases(&state.beta_cache, &plugin.repo).await {
+        Ok(releases) => {
+            let beta_versions: Vec<BetaVersion> = releases
+                .iter()
+                .map(convert_to_beta_version)
+                .collect();
+            Json(serde_json::json!({
+                "ok": true,
+                "beta_versions": beta_versions,
+            }))
+            .into_response()
+        }
+        Err(e) => json_err(StatusCode::BAD_GATEWAY, &format!("获取测试版信息失败: {e}")).into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -824,10 +1002,36 @@ async fn api_plugin_install(
     };
 
     // 查找指定版本，或使用最新版本
-    let version_entry = if let Some(ref ver) = q.version {
+    // 如果在注册表中找不到，尝试从测试版缓存中查找
+    let version_entry;
+    let version_entry_ref = if let Some(ref ver) = q.version {
+        // 先在注册表稳定版中查找
         match plugin.versions.iter().find(|v| v.version == *ver) {
             Some(v) => v,
-            None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}")),
+            None => {
+                // 稳定版中没有，尝试从测试版缓存中查找
+                let cache_read = state.beta_cache.read().await;
+                if let Some(entry) = cache_read.get(&plugin.repo) {
+                    let beta_version = entry.releases
+                        .iter()
+                        .map(convert_to_beta_version)
+                        .find(|bv| bv.version == *ver);
+                    if let Some(bv) = beta_version {
+                        // 找到测试版，创建临时 RegistryVersion
+                        version_entry = RegistryVersion {
+                            version: bv.version,
+                            tag: bv.tag,
+                            sdk_version: bv.sdk_version,
+                            assets: bv.assets,
+                        };
+                        &version_entry
+                    } else {
+                        return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}"));
+                    }
+                } else {
+                    return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}"));
+                }
+            }
         }
     } else {
         match plugin.versions.first() {
@@ -838,12 +1042,12 @@ async fn api_plugin_install(
 
     // 确定平台和资源文件名
     let platform_key = detect_platform();
-    let asset_name = match version_entry.assets.get(&platform_key) {
+    let asset_name = match version_entry_ref.assets.get(&platform_key) {
         Some(a) => a.clone(),
         None => {
             return json_err(
                 StatusCode::BAD_REQUEST,
-                &format!("插件 {name} v{} 不支持当前平台 {platform_key}", version_entry.version),
+                &format!("插件 {name} v{} 不支持当前平台 {platform_key}", version_entry_ref.version),
             )
         }
     };
@@ -851,20 +1055,20 @@ async fn api_plugin_install(
     // 构建下载 URL（使用缓存的可用镜像）
     let primary_url = format!(
         "https://github.com/{}/releases/download/{}/{}",
-        plugin.repo, version_entry.tag, asset_name
+        plugin.repo, version_entry_ref.tag, asset_name
     );
 
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
     let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
     let download_urls = build_mirrored_urls(&primary_url, &available_mirrors.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
-    info!("正在下载插件: {} v{}", name, version_entry.version);
+    info!("正在下载插件: {} v{}", name, version_entry_ref.version);
 
     // 发送下载开始进度
     let _ = state.progress_tx.send(DownloadProgress {
         plugin_name: name.clone(),
         status: "downloading".to_string(),
-        message: format!("正在下载 {} v{}...", name, version_entry.version),
+        message: format!("正在下载 {} v{}...", name, version_entry_ref.version),
         progress: Some(0.0),
     });
 
@@ -903,10 +1107,10 @@ async fn api_plugin_install(
         return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存文件失败: {e}"));
     }
 
-    info!("插件安装成功: {} v{} -> {}", name, version_entry.version, target.display());
+    info!("插件安装成功: {} v{} -> {}", name, version_entry_ref.version, target.display());
 
     // 保存版本信息
-    save_installed_version(&state.plugin_dir, &name, &version_entry.version);
+    save_installed_version(&state.plugin_dir, &name, &version_entry_ref.version);
 
     // 自动加载插件（无需重启）
     let config = crate::config::LNConfig::load();
@@ -917,12 +1121,12 @@ async fn api_plugin_install(
             let _ = state.progress_tx.send(DownloadProgress {
                 plugin_name: name.clone(),
                 status: "success".to_string(),
-                message: format!("插件 {} v{} 安装成功并已加载", name, version_entry.version),
+                message: format!("插件 {} v{} 安装成功并已加载", name, version_entry_ref.version),
                 progress: Some(1.0),
             });
             json_ok(&format!(
                 "插件 {} v{} 安装成功并已加载",
-                name, version_entry.version
+                name, version_entry_ref.version
             ))
         }
         Err(e) => {
@@ -930,12 +1134,12 @@ async fn api_plugin_install(
             let _ = state.progress_tx.send(DownloadProgress {
                 plugin_name: name.clone(),
                 status: "success".to_string(),
-                message: format!("插件 {} v{} 安装成功，但自动加载失败: {}", name, version_entry.version, e),
+                message: format!("插件 {} v{} 安装成功，但自动加载失败: {}", name, version_entry_ref.version, e),
                 progress: Some(1.0),
             });
             json_ok(&format!(
                 "插件 {} v{} 安装成功，但自动加载失败: {}",
-                name, version_entry.version, e
+                name, version_entry_ref.version, e
             ))
         }
     }
@@ -1003,7 +1207,7 @@ async fn api_plugin_disable(
     // 运行时禁用（取消订阅，等待线程退出，释放 DLL 锁）
     {
         let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-        match manager.disable_plugin(&name).await {
+        match manager.disable_plugin(&name, false).await {
             Ok(msg) => info!("{}", msg),
             Err(e) => {
                 // 如果不是"已经禁用"的错误，则中止文件重命名
@@ -1098,10 +1302,10 @@ async fn api_plugin_update(
 
     info!("正在更新插件: {} -> v{}", name, latest_version.version);
 
-    // 5. 如果插件是启用状态，先禁用
+    // 5. 如果插件是启用状态，先禁用（强制等待线程退出，确保DLL解锁）
     if was_enabled {
         let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-        match manager.disable_plugin(&name).await {
+        match manager.disable_plugin(&name, true).await {
             Ok(msg) => info!("{}", msg),
             Err(e) => {
                 if !e.contains("已经是禁用状态") {
@@ -1322,10 +1526,10 @@ async fn api_plugin_delete(
         return json_err(StatusCode::NOT_FOUND, &format!("未找到插件 {name}"));
     }
 
-    // 如果插件是启用状态，先运行时卸载（取消订阅、等待线程退出、释放 DLL 锁）
+    // 如果插件是启用状态，先运行时卸载（取消订阅、强制等待线程退出、释放 DLL 锁）
     if enabled.is_some() {
         let mut manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-        match manager.disable_plugin(&name).await {
+        match manager.disable_plugin(&name, true).await {
             Ok(msg) => info!("{}", msg),
             Err(e) => {
                 if !e.contains("已经是禁用状态") {
@@ -1756,6 +1960,166 @@ async fn fetch_registry_with_mirrors(mirrors: &[String]) -> Result<Registry, Str
     let urls = build_mirrored_urls(REGISTRY_URL, &mirror_refs);
     let body = fetch_with_fallback(&urls).await?;
     serde_json::from_str(&body).map_err(|e| format!("解析注册表失败: {e}"))
+}
+
+// ========== GitHub API 函数 ==========
+
+/// GitHub API 缓存 TTL（秒）
+const BETA_CACHE_TTL_SECS: u64 = 86400; // 24 小时（减少 API 请求次数，避免速率限制）
+
+/// 从 GitHub API 获取指定仓库的预发布 releases
+async fn fetch_beta_releases(
+    cache: &Arc<RwLock<HashMap<String, BetaCacheEntry>>>,
+    repo: &str,
+) -> Result<Vec<GitHubRelease>, String> {
+    // 1. 检查缓存
+    let cached_etag = {
+        let cache_read = cache.read().await;
+        if let Some(entry) = cache_read.get(repo) {
+            if entry.fetched_at.elapsed().as_secs() < BETA_CACHE_TTL_SECS {
+                info!("命中测试版缓存: {} ({}条)", repo, entry.releases.len());
+                return Ok(entry.releases.clone());
+            }
+            entry.etag.clone()
+        } else {
+            None
+        }
+    };
+
+    // 2. 调用 GitHub API（直连，无镜像支持）
+    let url = format!("https://api.github.com/repos/{}/releases", repo);
+    info!("正在获取测试版信息: {}", url);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS * 2)) // API 超时更长
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    let mut request = client
+        .get(&url)
+        .header("User-Agent", "luo9-bot")
+        .header("Accept", "application/vnd.github.v3+json");
+
+    // 使用 ETag 进行条件请求
+    if let Some(etag) = &cached_etag {
+        request = request.header("If-None-Match", etag);
+    }
+
+    let resp = request
+        .send()
+        .await
+        .map_err(|e| {
+            warn!("GitHub API 请求失败: {} - {}", repo, e);
+            format!("GitHub API 请求失败: {e}")
+        })?;
+
+    // 304 Not Modified - 使用缓存数据
+    if resp.status() == 304 {
+        info!("GitHub API 304 Not Modified: {}", repo);
+        let cache_read = cache.read().await;
+        if let Some(entry) = cache_read.get(repo) {
+            return Ok(entry.releases.clone());
+        }
+    }
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        if status.as_u16() == 403 {
+            warn!("GitHub API 速率限制: {}", repo);
+            return Err("GitHub API 速率限制（未认证每小时60次），请稍后重试".to_string());
+        }
+        warn!("GitHub API 请求失败: {} HTTP {}", repo, status);
+        return Err(format!("GitHub API 请求失败: HTTP {}", status));
+    }
+
+    // 获取 ETag
+    let new_etag = resp.headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let all_releases: Vec<GitHubRelease> = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析 GitHub API 响应失败: {e}"))?;
+
+    info!("获取到 {} 个 releases: {}", all_releases.len(), repo);
+
+    // 3. 过滤预发布版本（排除 draft）
+    let beta_releases: Vec<GitHubRelease> = all_releases
+        .into_iter()
+        .filter(|r| r.prerelease && !r.draft)
+        .collect();
+
+    info!("过滤后 {} 个测试版 releases: {}", beta_releases.len(), repo);
+
+    // 4. 更新缓存（保留旧 ETag 如果没有新的）
+    {
+        let mut cache_write = cache.write().await;
+        cache_write.insert(
+            repo.to_string(),
+            BetaCacheEntry {
+                releases: beta_releases.clone(),
+                fetched_at: std::time::Instant::now(),
+                etag: new_etag.or(cached_etag),
+            },
+        );
+    }
+
+    Ok(beta_releases)
+}
+
+/// 从 tag_name 解析版本号和通道类型
+fn parse_version_channel(tag: &str) -> (String, String) {
+    let version = tag.trim_start_matches('v').to_string();
+    let channel = if version.contains("alpha") {
+        "alpha".to_string()
+    } else if version.contains("beta") {
+        "beta".to_string()
+    } else if version.contains("rc") {
+        "rc".to_string()
+    } else if version.contains("dev") {
+        "dev".to_string()
+    } else {
+        "pre".to_string()
+    };
+    (version, channel)
+}
+
+/// 从 GitHub Release 转换为 BetaVersion
+fn convert_to_beta_version(release: &GitHubRelease) -> BetaVersion {
+    let (version, channel) = parse_version_channel(&release.tag_name);
+    let mut assets = HashMap::new();
+
+    for asset in &release.assets {
+        let name = &asset.name;
+        if name.ends_with(".dll") {
+            // Windows 平台
+            if name.contains("aarch64") || name.contains("arm64") {
+                assets.insert("windows-aarch64".to_string(), name.clone());
+            } else {
+                // 默认假设 x86_64（包括没有架构信息的情况）
+                assets.insert("windows-x86_64".to_string(), name.clone());
+            }
+        } else if name.ends_with(".so") {
+            // Linux 平台
+            if name.contains("aarch64") || name.contains("arm64") {
+                assets.insert("linux-aarch64".to_string(), name.clone());
+            } else {
+                // 默认假设 x86_64（包括没有架构信息的情况）
+                assets.insert("linux-x86_64".to_string(), name.clone());
+            }
+        }
+    }
+
+    BetaVersion {
+        version,
+        tag: release.tag_name.clone(),
+        channel,
+        sdk_version: "unknown".to_string(),
+        assets,
+        published_at: release.published_at.clone(),
+    }
 }
 
 fn detect_platform() -> String {
