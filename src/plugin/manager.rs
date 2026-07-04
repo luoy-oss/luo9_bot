@@ -117,11 +117,11 @@ impl PluginManager {
     /// 禁用插件（运行时热禁用）
     ///
     /// 1. 取消所有 topic 订阅（触发 sentinel，插件线程退出）
-    /// 2. 等待线程退出（5 秒超时）
+    /// 2. 等待线程退出（500ms 超时，force=true 时无超时）
     /// 3. 标记为 inactive
     /// 4. 从 handles 中移除（释放 Arc<Library>，解锁 DLL 文件）
     /// 5. 更新分发列表
-    pub async fn disable_plugin(&mut self, name: &str) -> Result<String, String> {
+    pub async fn disable_plugin(&mut self, name: &str, force: bool) -> Result<String, String> {
         // 获取句柄
         let handle = self.handles.get_mut(name)
             .ok_or_else(|| format!("插件 {name} 不存在"))?;
@@ -130,15 +130,22 @@ impl PluginManager {
             return Err(format!("插件 {name} 已经是禁用状态"));
         }
 
-        info!("正在禁用插件: {}", name);
+        info!("正在禁用插件: {} (force={})", name, force);
 
-        // 1. 取消所有订阅
+        // 1. 取消所有订阅（会立即唤醒阻塞的 wait_pop）
         handle.unsubscribe_all();
 
         // 2. 等待线程退出
-        let exited = handle.wait_exit(std::time::Duration::from_secs(5));
+        let exited = if force {
+            // 强制等待，无超时（用于文件删除前）
+            handle.force_wait_exit()
+        } else {
+            // 500ms 超时
+            handle.wait_exit(std::time::Duration::from_millis(500))
+        };
+
         if !exited {
-            warn!("插件 {} 线程在 5 秒内未退出，标记为 inactive 但线程可能仍在运行", name);
+            warn!("插件 {} 线程在 500ms 内未退出，强制标记为 inactive", name);
         } else {
             info!("插件 {} 线程已退出", name);
         }
@@ -242,10 +249,10 @@ impl PluginManager {
             })
             .ok_or_else(|| format!("插件 {name} 不存在，无法获取路径"))?;
 
-        // 禁用（如果 active）
+        // 禁用（如果 active，强制等待线程退出以确保DLL解锁）
         if let Some(handle) = self.handles.get(name) {
             if handle.active {
-                match self.disable_plugin(name).await {
+                match self.disable_plugin(name, true).await {
                     Ok(_) => {}
                     Err(e) => {
                         error!("禁用插件 {} 失败: {}", name, e);

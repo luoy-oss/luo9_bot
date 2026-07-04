@@ -13,3 +13,5 @@ build.rs
 Cargo.lock
 
 *.temp
+
+plans/
