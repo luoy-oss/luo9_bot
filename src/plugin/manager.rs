@@ -119,7 +119,7 @@ impl PluginManager {
     /// 1. 取消所有 topic 订阅（触发 sentinel，插件线程退出）
     /// 2. 等待线程退出（500ms 超时，force=true 时无超时）
     /// 3. 标记为 inactive
-    /// 4. 从 handles 中移除（释放 Arc<Library>，解锁 DLL 文件）
+    /// 4. 从 handles 中移除（释放 Runtime，解锁 DLL 文件等资源）
     /// 5. 更新分发列表
     pub async fn disable_plugin(&mut self, name: &str, force: bool) -> Result<String, String> {
         // 获取句柄
@@ -158,7 +158,7 @@ impl PluginManager {
             info.active = false;
         }
 
-        // 4. 从 handles 中移除（释放 Arc<Library>，解锁 DLL 文件）
+        // 4. 从 handles 中移除（释放 Runtime，解锁 DLL 文件等资源）
         self.handles.remove(name);
 
         // 5. 更新分发列表
@@ -188,7 +188,7 @@ impl PluginManager {
             }
         }
 
-        // 移除 inactive 的旧句柄（释放 Arc<Library>）
+        // 移除 inactive 的旧句柄（释放 Runtime）
         if let Some(old) = self.handles.remove(name) {
             if old.active {
                 // 不应该到这里，但以防万一
@@ -278,10 +278,10 @@ impl PluginManager {
                 name: h.name.clone(),
                 priority: h.priority,
                 block_enabled: h.block_enabled,
-                message_sub_id: h.subscriber_ids.get("luo9_message").copied(),
-                notice_sub_id: h.subscriber_ids.get("luo9_notice").copied(),
-                meta_event_sub_id: h.subscriber_ids.get("luo9_meta_event").copied(),
-                request_sub_id: h.subscriber_ids.get("luo9_request").copied(),
+                message_sub_id: h.runtime.subscriber_ids().get("luo9_message").copied(),
+                notice_sub_id: h.runtime.subscriber_ids().get("luo9_notice").copied(),
+                meta_event_sub_id: h.runtime.subscriber_ids().get("luo9_meta_event").copied(),
+                request_sub_id: h.runtime.subscriber_ids().get("luo9_request").copied(),
             })
             .collect();
 

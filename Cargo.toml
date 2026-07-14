@@ -10,6 +10,12 @@ bot_debug = []
 plugin_dispatch_debug = []
 napcat = []
 plugins = []  # 插件系统支持
+
+# 嵌入式运行时 feature flags（按需启用，未启用不增加依赖）
+python-plugin = []    # 嵌入 CPython (pyo3)
+java-plugin = []      # 嵌入 JVM (jni)
+quickjs-plugin = []   # 嵌入 QuickJS (quickjs-rs)
+
 default = ["napcat"]
 
 [dependencies]
