@@ -56,7 +56,7 @@ Napcat ──WebSocket──> Receiver (server :27001)
 |---|---|---|
 | 宿主 (Host) | `rust/` | WebSocket 连接、事件路由、插件生命周期管理 |
 | 核心库 (Core) | `sdk/core/` → `luo9_core.dll` | FFI 消息总线、命令解析，暴露 `extern "C"` 函数 |
-| SDK | `sdk/rust/`, `sdk/cpp/`, `sdk/python/`, `sdk/java/`, `sdk/kotlin/`, `sdk/nodejs/` | 各语言对 Core FFI 的惯用封装 |
+| SDK | `sdk/rust/`, `sdk/cpp/`, `sdk/go/`, `sdk/python/`, `sdk/java/`, `sdk/kotlin/`, `sdk/nodejs/` | 各语言对 Core FFI 的惯用封装 |
 
 ### 关键设计决策
 
