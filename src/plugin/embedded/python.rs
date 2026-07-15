@@ -9,10 +9,94 @@ use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 use tracing::{info, error};
 
+#[cfg(unix)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(unix)]
+use std::sync::OnceLock;
+
 use crate::plugin::runtime::PluginRuntime;
 
 /// 全局一次性初始化 Python 解释器（free-threaded 模式）
 static PYTHON_INIT: std::sync::Once = std::sync::Once::new();
+
+// ──────────────────────────────── SIGINT 保护 ────────────────────────────────
+
+/// 进程级 SIGINT handler 的保存槽（仅首次 guard 写入）
+#[cfg(unix)]
+static SAVED_SIGINT_HANDLER: OnceLock<libc::sigaction> = OnceLock::new();
+
+/// 当前存活的 SigintGuard 数量（首个 guard 保存 handler，最后一个恢复）
+#[cfg(unix)]
+static SIGINT_GUARD_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// RAII 守卫：在首尾配对保存 / 恢复进程级 SIGINT handler。
+///
+/// Python 代码（`import signal`、第三方库等）会通过 `sigaction()` 覆盖
+/// tokio/signal_hook 注册的 handler，导致主进程的 `ctrl_c()` 失效。
+/// 本 guard 保证 Python 代码执行期间的 handler 变更是临时的：
+///   - 第一个 guard 创建时保存当前 handler（tokio 的）
+///   - 最后一个 guard drop 时恢复
+/// 多个 Python 插件线程并发时也能正确工作。
+#[cfg(unix)]
+struct SigintGuard;
+
+#[cfg(unix)]
+impl SigintGuard {
+    fn protect() -> Self {
+        if SIGINT_GUARD_COUNT.fetch_add(1, Ordering::SeqCst) == 0 {
+            // 首个 guard：保存当前 handler
+            unsafe {
+                let mut sa: libc::sigaction = std::mem::zeroed();
+                libc::sigaction(libc::SIGINT, std::ptr::null(), &mut sa);
+                let _ = SAVED_SIGINT_HANDLER.set(sa);
+            }
+        }
+        Self
+    }
+}
+
+#[cfg(unix)]
+impl Drop for SigintGuard {
+    fn drop(&mut self) {
+        if SIGINT_GUARD_COUNT.fetch_sub(1, Ordering::SeqCst) == 1 {
+            // 最后一个 guard：恢复原始 handler
+            if let Some(handler) = SAVED_SIGINT_HANDLER.get() {
+                unsafe {
+                    libc::sigaction(
+                        libc::SIGINT,
+                        handler as *const _,
+                        std::ptr::null_mut(),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// 在当前线程屏蔽 SIGINT，使该信号只能投递到主线程（由 tokio 处理）。
+#[cfg(unix)]
+fn block_sigint_on_current_thread() {
+    unsafe {
+        let mut mask: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut mask);
+        libc::sigaddset(&mut mask, libc::SIGINT);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &mask, std::ptr::null_mut());
+    }
+}
+
+// ─────────────────────────── Windows 兼容（no-op）───────────────────────────
+
+#[cfg(not(unix))]
+struct SigintGuard;
+#[cfg(not(unix))]
+impl SigintGuard {
+    fn protect() -> Self { Self }
+}
+
+#[cfg(not(unix))]
+fn block_sigint_on_current_thread() {}
+
+// ───────────────────────────── PythonRuntime ──────────────────────────────
 
 /// Python 插件运行时
 pub struct PythonRuntime {
@@ -76,7 +160,8 @@ impl PluginRuntime for PythonRuntime {
     }
 }
 
-/// 在独立线程中执行 Python 插件
+// ─────────────────────── 核心：在独立线程执行 Python 插件 ───────────────────────
+
 fn run_python_plugin(
     plugin_path: &Path,
     plugin_name: &str,
@@ -85,15 +170,20 @@ fn run_python_plugin(
     use pyo3::prelude::*;
     use pyo3::types::PyDict;
 
-    // 初始化 Python 解释器（仅首次调用生效）
-    // Python SDK 通过 GetModuleHandle/RTLD_NOLOAD 自动复用宿主已加载的 luo9_core
+    // ── Step 1: 屏蔽此线程的 SIGINT ──
+    // SIGINT 只应投递到主线程，由 tokio 统一处理。
+    // Python 线程屏蔽后不再收到 Ctrl+C，不会抛 KeyboardInterrupt。
+    block_sigint_on_current_thread();
+
+    // ── Step 2: 初始化 Python 解释器（全局仅一次）──
     PYTHON_INIT.call_once(|| {
         pyo3::prepare_freethreaded_python();
-        // 重置 SIGINT 为系统默认行为（终止进程），防止 Python 的 KeyboardInterrupt
-        // 干扰宿主的 tokio 信号处理。prepare_freethreaded_python 会安装 Python 的
-        // SIGINT handler，必须在初始化后立即覆盖。
-        reset_sigint_handler();
     });
+
+    // ── Step 3: RAII guard 保护进程级 SIGINT handler ──
+    // Python 代码（`import signal`、第三方库）会通过 sigaction() 覆盖
+    // tokio/signal_hook 注册的 handler。Guard 保证执行完后恢复。
+    let _sig_guard = SigintGuard::protect();
 
     let plugin_name_owned = plugin_name.to_string();
     let plugin_path_owned = plugin_path.to_path_buf();
@@ -144,29 +234,16 @@ fn run_python_plugin(
                 .unwrap_or("plugin");
             let plugin_mod = py.import(stem)?;
 
-            // 调用 plugin_main()（包装错误捕获 + 强制刷新输出）
+            // 调用 plugin_main()
             let main_fn = plugin_mod.getattr("plugin_main")?;
             info!("[python] 插件 {} 开始执行", plugin_name_owned);
 
-            // 注入调试代码：强制 unbuffered 输出
-            let sys = py.import("sys")?;
-            let stderr = sys.getattr("stderr")?;
-            let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 启动, subs={:?}\n", plugin_name_owned, subs),));
-            let _ = stderr.call_method0("flush");
-
-            // 用 try/except 包装 plugin_main，捕获异常并强制输出
-            let traceback_mod = py.import("traceback")?;
-
             match main_fn.call0() {
                 Ok(_) => {
-                    let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 正常退出\n", plugin_name_owned),));
-                    let _ = stderr.call_method0("flush");
                     info!("[python] 插件 {} 已正常退出", plugin_name_owned);
                 }
                 Err(e) => {
-                    let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 异常: {}\n", plugin_name_owned, e),));
-                    let _ = traceback_mod.call_method0("print_exc");
-                    let _ = stderr.call_method0("flush");
+                    error!("[python] 插件 {} 异常: {}", plugin_name_owned, e);
                     return Err(e);
                 }
             }
@@ -174,36 +251,11 @@ fn run_python_plugin(
         })
     }));
 
+    // _sig_guard 在此 drop → 恢复 tokio 的 SIGINT handler（如果是最后一个 guard）
+
     match result {
         Ok(Ok(())) => {}
         Ok(Err(e)) => error!("[python] 插件 {} Python 错误: {}", plugin_name, e),
         Err(e) => error!("[python] 插件 {} panic: {:?}", plugin_name, e),
-    }
-}
-
-/// 重置 SIGINT 为系统默认行为（终止进程）
-///
-/// Python 初始化时会安装自己的 SIGINT handler，将 Ctrl+C 转换为
-/// KeyboardInterrupt 异常。这会干扰宿主的 tokio 信号处理，导致进程无法正常退出。
-/// 此函数在 Python 初始化后立即调用，将 SIGINT 恢复为默认行为。
-fn reset_sigint_handler() {
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_DFL);
-    }
-    #[cfg(windows)]
-    {
-        // Windows: 添加一个返回 FALSE 的 Ctrl+C handler，让信号传递到默认处理器（终止进程）
-        // Python 的 handler 返回 TRUE 会吞掉信号，我们追加一个 FALSE handler 来恢复默认行为
-        unsafe extern "system" {
-            fn SetConsoleCtrlHandler(
-                handler: Option<unsafe extern "system" fn(u32) -> i32>,
-                add: i32,
-            ) -> i32;
-        }
-        unsafe extern "system" fn ctrl_handler(_ctrl_type: u32) -> i32 {
-            0 // FALSE = 不处理，让系统执行默认行为（终止进程）
-        }
-        unsafe { SetConsoleCtrlHandler(Some(ctrl_handler), 1) };
     }
 }
