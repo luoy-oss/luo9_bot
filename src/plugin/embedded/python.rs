@@ -89,14 +89,11 @@ fn run_python_plugin(
     // Python SDK 通过 GetModuleHandle/RTLD_NOLOAD 自动复用宿主已加载的 luo9_core
     PYTHON_INIT.call_once(|| {
         pyo3::prepare_freethreaded_python();
+        // 重置 SIGINT 为系统默认行为（终止进程），防止 Python 的 KeyboardInterrupt
+        // 干扰宿主的 tokio 信号处理。prepare_freethreaded_python 会安装 Python 的
+        // SIGINT handler，必须在初始化后立即覆盖。
+        reset_sigint_handler();
     });
-
-    // 重置 SIGINT 为系统默认行为，防止 Python 的 KeyboardInterrupt 干扰宿主
-    // Python 初始化时会安装 SIGINT handler，需要在插件线程中重置
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_DFL);
-    }
 
     let plugin_name_owned = plugin_name.to_string();
     let plugin_path_owned = plugin_path.to_path_buf();
@@ -181,5 +178,32 @@ fn run_python_plugin(
         Ok(Ok(())) => {}
         Ok(Err(e)) => error!("[python] 插件 {} Python 错误: {}", plugin_name, e),
         Err(e) => error!("[python] 插件 {} panic: {:?}", plugin_name, e),
+    }
+}
+
+/// 重置 SIGINT 为系统默认行为（终止进程）
+///
+/// Python 初始化时会安装自己的 SIGINT handler，将 Ctrl+C 转换为
+/// KeyboardInterrupt 异常。这会干扰宿主的 tokio 信号处理，导致进程无法正常退出。
+/// 此函数在 Python 初始化后立即调用，将 SIGINT 恢复为默认行为。
+fn reset_sigint_handler() {
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_DFL);
+    }
+    #[cfg(windows)]
+    {
+        // Windows: 添加一个返回 FALSE 的 Ctrl+C handler，让信号传递到默认处理器（终止进程）
+        // Python 的 handler 返回 TRUE 会吞掉信号，我们追加一个 FALSE handler 来恢复默认行为
+        unsafe extern "system" {
+            fn SetConsoleCtrlHandler(
+                handler: Option<unsafe extern "system" fn(u32) -> i32>,
+                add: i32,
+            ) -> i32;
+        }
+        unsafe extern "system" fn ctrl_handler(_ctrl_type: u32) -> i32 {
+            0 // FALSE = 不处理，让系统执行默认行为（终止进程）
+        }
+        unsafe { SetConsoleCtrlHandler(Some(ctrl_handler), 1) };
     }
 }
