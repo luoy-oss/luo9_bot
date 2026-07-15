@@ -12,9 +12,9 @@ napcat = []
 plugins = []  # 插件系统支持
 
 # 嵌入式运行时 feature flags（按需启用，未启用不增加依赖）
-python-plugin = []    # 嵌入 CPython (pyo3)
-java-plugin = []      # 嵌入 JVM (jni)
-quickjs-plugin = []   # 嵌入 QuickJS (quickjs-rs)
+python-plugin = ["dep:pyo3"]            # 嵌入 CPython (pyo3)
+java-plugin = ["dep:jni"]              # 嵌入 JVM (jni)
+quickjs-plugin = ["dep:rquickjs"]      # 嵌入 QuickJS (rquickjs)
 
 default = ["napcat"]
 
@@ -52,6 +52,11 @@ tower-http = { version = "0.6.9", features = ["cors"] }
 reqwest = { version = "0.13.3", features = ["json", "stream"] }
 dirs = "6"
 async-stream = "0.3"
+
+# 嵌入式运行时依赖（按 feature flag 条件引入）
+pyo3 = { version = "0.25", features = ["auto-initialize"], optional = true }
+jni = { version = "0.21", features = ["invocation"], optional = true }
+rquickjs = { version = "0.9", features = ["bindgen"], optional = true }
 
 
 [lib]

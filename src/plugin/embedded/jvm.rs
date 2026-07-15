@@ -14,14 +14,21 @@ use crate::plugin::runtime::PluginRuntime;
 /// JVM 插件运行时
 pub struct JvmRuntime {
     plugin_path: PathBuf,
+    plugin_name: String,
     thread_handle: Option<JoinHandle<()>>,
     subscriber_ids: HashMap<String, usize>,
 }
 
 impl JvmRuntime {
     pub fn new(path: &Path) -> Result<Self, String> {
+        let file_name = path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        let name = file_name.trim_end_matches(".jar").to_string();
+
         Ok(Self {
             plugin_path: path.to_path_buf(),
+            plugin_name: name,
             thread_handle: None,
             subscriber_ids: HashMap::new(),
         })
@@ -33,15 +40,11 @@ impl PluginRuntime for JvmRuntime {
         self.subscriber_ids = subscriber_ids;
 
         let plugin_path = self.plugin_path.clone();
+        let plugin_name = self.plugin_name.clone();
+        let subs = self.subscriber_ids.clone();
 
         self.thread_handle = Some(std::thread::spawn(move || {
-            // TODO: JNI 创建 JVM
-            // 1. JNI_CreateJavaVM()
-            // 2. 设置 classpath 包含插件 JAR
-            // 3. 查找插件主类 (plugin.toml 中的 entry)
-            // 4. 调用 plugin_main() 静态方法
-            info!("JVM 插件线程启动: {:?}", plugin_path);
-            error!("JVM 运行时尚未实现");
+            run_jvm_plugin(&plugin_path, &plugin_name, &subs);
         }));
 
         Ok(())
@@ -55,7 +58,6 @@ impl PluginRuntime for JvmRuntime {
     }
 
     fn stop(&mut self) -> Result<(), String> {
-        // TODO: 通知 JVM 退出
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
@@ -68,5 +70,124 @@ impl PluginRuntime for JvmRuntime {
 
     fn subscriber_ids(&self) -> &HashMap<String, usize> {
         &self.subscriber_ids
+    }
+}
+
+/// 在独立线程中执行 JVM 插件
+fn run_jvm_plugin(
+    plugin_path: &Path,
+    plugin_name: &str,
+    _subscriber_ids: &HashMap<String, usize>,
+) {
+    use jni::{InitArgsBuilder, JavaVM};
+
+    // 构建 classpath：插件 JAR + SDK JAR + 工作目录
+    let plugin_jar = plugin_path.to_string_lossy();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let sdk_jar_dir = cwd.join("sdk").join("java").join("target");
+
+    // 收集所有 JAR 文件作为 classpath
+    let mut classpath_parts: Vec<String> = vec![plugin_jar.to_string()];
+
+    // SDK JAR（如果有编译产物）
+    if sdk_jar_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&sdk_jar_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().map(|e| e == "jar").unwrap_or(false) {
+                    classpath_parts.push(p.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // 插件同目录下的其他 JAR（依赖库）
+    if let Some(parent) = plugin_path.parent() {
+        if let Ok(entries) = std::fs::read_dir(parent) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p != plugin_path && p.extension().map(|e| e == "jar").unwrap_or(false) {
+                    classpath_parts.push(p.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    let separator = if cfg!(windows) { ";" } else { ":" };
+    let classpath = classpath_parts.join(separator);
+    let classpath_opt = format!("-Djava.class.path={}", classpath);
+    info!("[jvm] classpath: {}", classpath);
+
+    // 创建 JVM
+    let jvm_args = match InitArgsBuilder::new()
+        .option(&classpath_opt)
+        .build()
+    {
+        Ok(args) => args,
+        Err(e) => {
+            error!("[jvm] 构建 JVM 参数失败: {}", e);
+            return;
+        }
+    };
+
+    let jvm = match JavaVM::new(jvm_args) {
+        Ok(vm) => vm,
+        Err(e) => {
+            error!("[jvm] 创建 JVM 失败: {}", e);
+            return;
+        }
+    };
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut env = match jvm.attach_current_thread() {
+            Ok(env) => env,
+            Err(e) => {
+                error!("[jvm] 附加线程到 JVM 失败: {}", e);
+                return;
+            }
+        };
+
+        // 查找插件主类（默认为 com.luo9.plugin.PluginMain）
+        let class_name = "com/luo9/plugin/PluginMain";
+        let main_class = match env.find_class(class_name) {
+            Ok(cls) => cls,
+            Err(e) => {
+                error!("[jvm] 找不到插件主类 {}: {}", class_name, e);
+                return;
+            }
+        };
+
+        // 查找 plugin_main() 静态方法
+        let main_method = match env.get_static_method_id(
+            &main_class,
+            "plugin_main",
+            "()V",
+        ) {
+            Ok(method) => method,
+            Err(e) => {
+                error!("[jvm] 找不到 plugin_main() 方法: {}", e);
+                return;
+            }
+        };
+
+        info!("[jvm] 插件 {} 开始执行", plugin_name);
+
+        // 调用 plugin_main()
+        unsafe {
+            match env.call_static_method_unchecked(
+                &main_class,
+                main_method,
+                jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                &[],
+            ) {
+                Ok(_) => info!("[jvm] 插件 {} 已正常退出", plugin_name),
+                Err(e) => error!("[jvm] 插件 {} 执行异常: {}", plugin_name, e),
+            }
+        }
+    }));
+
+    match result {
+        Ok(()) => {}
+        Err(e) => error!("[jvm] 插件 {} panic: {:?}", plugin_name, e),
     }
 }
