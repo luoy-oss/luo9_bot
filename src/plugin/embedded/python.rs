@@ -86,9 +86,17 @@ fn run_python_plugin(
     use pyo3::types::PyDict;
 
     // 初始化 Python 解释器（仅首次调用生效）
+    // Python SDK 通过 GetModuleHandle/RTLD_NOLOAD 自动复用宿主已加载的 luo9_core
     PYTHON_INIT.call_once(|| {
         pyo3::prepare_freethreaded_python();
     });
+
+    // 重置 SIGINT 为系统默认行为，防止 Python 的 KeyboardInterrupt 干扰宿主
+    // Python 初始化时会安装 SIGINT handler，需要在插件线程中重置
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_DFL);
+    }
 
     let plugin_name_owned = plugin_name.to_string();
     let plugin_path_owned = plugin_path.to_path_buf();
@@ -139,12 +147,32 @@ fn run_python_plugin(
                 .unwrap_or("plugin");
             let plugin_mod = py.import(stem)?;
 
-            // 调用 plugin_main()
+            // 调用 plugin_main()（包装错误捕获 + 强制刷新输出）
             let main_fn = plugin_mod.getattr("plugin_main")?;
             info!("[python] 插件 {} 开始执行", plugin_name_owned);
 
-            main_fn.call0()?;
-            info!("[python] 插件 {} 已正常退出", plugin_name_owned);
+            // 注入调试代码：强制 unbuffered 输出
+            let sys = py.import("sys")?;
+            let stderr = sys.getattr("stderr")?;
+            let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 启动, subs={:?}\n", plugin_name_owned, subs),));
+            let _ = stderr.call_method0("flush");
+
+            // 用 try/except 包装 plugin_main，捕获异常并强制输出
+            let traceback_mod = py.import("traceback")?;
+
+            match main_fn.call0() {
+                Ok(_) => {
+                    let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 正常退出\n", plugin_name_owned),));
+                    let _ = stderr.call_method0("flush");
+                    info!("[python] 插件 {} 已正常退出", plugin_name_owned);
+                }
+                Err(e) => {
+                    let _ = stderr.call_method1("write", (format!("[python-debug] 插件 {} 异常: {}\n", plugin_name_owned, e),));
+                    let _ = traceback_mod.call_method0("print_exc");
+                    let _ = stderr.call_method0("flush");
+                    return Err(e);
+                }
+            }
             Ok(())
         })
     }));
