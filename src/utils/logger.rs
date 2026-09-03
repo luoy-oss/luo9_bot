@@ -82,14 +82,17 @@ pub fn init(level: &str) {
             filter = filter.add_directive(format!("{}=warn", noisy).parse().unwrap());
         }
 
-        fmt::Subscriber::builder()
+        let init_result = fmt::Subscriber::builder()
             .with_env_filter(filter)
             .with_target(true)
             .with_thread_ids(true)
             .with_ansi(true)
             .with_writer(GlobalWriterMaker)
-            .init();
+            .try_init();
 
-        tracing::info!("日志系统已初始化，级别: {}", level);
+        match init_result {
+            Ok(()) => tracing::info!("日志系统已初始化，级别: {}", level),
+            Err(error) => eprintln!("日志系统已由其他组件初始化，跳过重复初始化: {}", error),
+        }
     });
 }
