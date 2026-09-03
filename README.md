@@ -10,8 +10,12 @@ _✨ 一个专注于高效、跨平台的 QQ 机器人 ✨_
 
 | 项目 | 简介 | 状态 |
 | :--- | :--- | :--- |
-| [luo9_sdk_rust](https://github.com/luo9-bot/luo9_sdk_rust) | Rust SDK | 🚧 开发中 |
-| [luo9_sdk_cpp](https://github.com/luo9-bot/luo9_sdk_cpp) | C++ SDK | 🚧 开发中 |
+| [luo9_sdk_rust](https://github.com/luo9-bot/luo9_sdk_rust) | 高性能 Rust SDK，提供底层 API 封装 | ✅️ 已完成 |
+| [luo9_sdk_cpp](https://github.com/luo9-bot/luo9_sdk_cpp) | C++ SDK | ✅️ 已完成 |
+| [luo9_sdk_java](https://github.com/luo9-bot/luo9_sdk_java)| Java SDK | 🚧 开发中 |
+| [luo9_sdk_kotlin](https://github.com/luo9-bot/luo9_sdk_kotlin)| Kotlin SDK | 🚧 开发中 |
+| [luo9_sdk_python](https://github.com/luo9-bot/luo9_sdk_python)| Python SDK | 🚧 开发中 |
+| [luo9_sdk_go](https://github.com/luo9-bot/luo9_sdk_go)| Go SDK | 🚧 开发中 |
 
 ### 示例插件
 
@@ -19,6 +23,10 @@ _✨ 一个专注于高效、跨平台的 QQ 机器人 ✨_
 | :--- | :--- | :--- |
 | [luo9_plugin_rust](https://github.com/luo9-bot/plugin-rust-example) | Rust 示例插件 | ✅ 已发布 |
 | [luo9_plugin_cpp](https://github.com/luo9-bot/plugin-cpp-example) | C++ 示例插件 | ✅ 已发布 |
+| [luo9_plugin_java](https://github.com/luo9-bot/plugin-java-example)| Java SDK | 🚧 开发中 |
+| [luo9_plugin_kotlin](https://github.com/luo9-bot/plugin-kotlin-example)| Kotlin SDK | 🚧 开发中 |
+| [luo9_plugin_python](https://github.com/luo9-bot/plugin-python-example)| Python SDK | 🚧 开发中 |
+| [luo9_plugin_go](https://github.com/luo9-bot/plugin-go-example)| Go SDK | 🚧 开发中 |
 
 
 

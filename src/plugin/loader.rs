@@ -2,13 +2,13 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use libloading::Library;
 use tracing::{info, error, warn};
 
 use super::handle::PluginHandle;
 use super::manager::{PluginInfo, PluginStats};
 use super::bus::{Bus, TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_REQUEST, TOPIC_TASK, TOPIC_SEND};
+use super::native_runtime::NativeRuntime;
+use super::runtime::PluginRuntime;
 
 /// 插件加载器
 pub struct PluginLoader {
@@ -62,23 +62,30 @@ impl PluginLoader {
         Ok((infos, handles))
     }
 
-    /// 加载单个插件并启动其 plugin_main 线程
-    ///
-    /// 返回 (PluginInfo, Option<PluginHandle>)。若插件未导出 plugin_main，handle 为 None。
+    /// 加载单个插件
     fn load_single(&self, path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+        match ext {
+            "dll" | "so" => self.load_native_plugin(path, default_id),
+            "py" => self.load_python_plugin(path, default_id),
+            "jar" => self.load_jvm_plugin(path, default_id),
+            "js" => self.load_quickjs_plugin(path, default_id),
+            _ => {
+                warn!("不支持的插件类型: {:?}", path);
+                Ok((Self::make_info(path, default_id, false), None))
+            }
+        }
+    }
+
+    /// 加载原生 DLL/SO 插件
+    fn load_native_plugin(&self, path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
         unsafe {
-            let lib = Arc::new(
-                Library::new(path)
-                    .map_err(|e| format!("加载动态库失败: {}", e))?
-            );
+            let mut runtime = NativeRuntime::new(&path.to_path_buf())?;
+            let has_main = runtime.has_plugin_main();
 
-            // 检查是否导出了 plugin_main
-            let has_main = lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok();
-
-            let file_name = path.file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
-            let plugin_name = extract_display_name(file_name);
+            let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let plugin_name = super::native_runtime::extract_display_name(file_name);
 
             let info = PluginInfo {
                 id: default_id,
@@ -93,21 +100,12 @@ impl PluginLoader {
             };
 
             let handle = if has_main {
-                // 为插件创建 per-topic subscriber
                 let subscriber_ids = Self::create_subscribers(&plugin_name);
-
-                let lib_clone = Arc::clone(&lib);
-                let subs = subscriber_ids.clone();
-                let name = plugin_name.clone();
-                let thread_handle = std::thread::spawn(move || {
-                    Self::run_plugin(lib_clone, &name, subs);
-                });
+                runtime.start(subscriber_ids.clone())?;
 
                 Some(PluginHandle {
                     name: plugin_name,
-                    lib,
-                    thread_handle: Some(thread_handle),
-                    subscriber_ids,
+                    runtime: Box::new(runtime),
                     priority: 0,
                     block_enabled: false,
                     active: true,
@@ -119,6 +117,129 @@ impl PluginLoader {
             };
 
             Ok((info, handle))
+        }
+    }
+
+    /// 加载 Python 插件
+    fn load_python_plugin(&self, path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
+        #[cfg(feature = "python-plugin")]
+        {
+            let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let plugin_name = file_name.trim_end_matches(".py").to_string();
+
+            let subscriber_ids = Self::create_subscribers(&plugin_name);
+
+            let mut runtime = super::embedded::python::PythonRuntime::new(path)?;
+            runtime.start(subscriber_ids)?;
+
+            let info = PluginInfo {
+                id: default_id,
+                name: plugin_name.clone(),
+                version: String::new(),
+                enabled: true,
+                path: Some(path.to_string_lossy().to_string()),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                stats: PluginStats::default(),
+            };
+
+            Ok((info, Some(PluginHandle {
+                name: plugin_name,
+                runtime: Box::new(runtime),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                path: path.to_path_buf(),
+            })))
+        }
+
+        #[cfg(not(feature = "python-plugin"))]
+        {
+            warn!("Python 插件支持未启用（需启用 python-plugin feature）: {:?}", path);
+            Ok((Self::make_info(path, default_id, false), None))
+        }
+    }
+
+    /// 加载 JVM 插件
+    fn load_jvm_plugin(&self, path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
+        #[cfg(feature = "java-plugin")]
+        {
+            let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let plugin_name = file_name.trim_end_matches(".jar").to_string();
+
+            let subscriber_ids = Self::create_subscribers(&plugin_name);
+
+            let mut runtime = super::embedded::jvm::JvmRuntime::new(path)?;
+            runtime.start(subscriber_ids)?;
+
+            let info = PluginInfo {
+                id: default_id,
+                name: plugin_name.clone(),
+                version: String::new(),
+                enabled: true,
+                path: Some(path.to_string_lossy().to_string()),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                stats: PluginStats::default(),
+            };
+
+            Ok((info, Some(PluginHandle {
+                name: plugin_name,
+                runtime: Box::new(runtime),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                path: path.to_path_buf(),
+            })))
+        }
+
+        #[cfg(not(feature = "java-plugin"))]
+        {
+            warn!("Java 插件支持未启用（需启用 java-plugin feature）: {:?}", path);
+            Ok((Self::make_info(path, default_id, false), None))
+        }
+    }
+
+    /// 加载 QuickJS 插件
+    fn load_quickjs_plugin(&self, path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
+        #[cfg(feature = "quickjs-plugin")]
+        {
+            let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let plugin_name = file_name.trim_end_matches(".js").to_string();
+
+            let subscriber_ids = Self::create_subscribers(&plugin_name);
+
+            let mut runtime = super::embedded::quickjs::QuickjsRuntime::new(path)?;
+            runtime.start(subscriber_ids)?;
+
+            let info = PluginInfo {
+                id: default_id,
+                name: plugin_name.clone(),
+                version: String::new(),
+                enabled: true,
+                path: Some(path.to_string_lossy().to_string()),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                stats: PluginStats::default(),
+            };
+
+            Ok((info, Some(PluginHandle {
+                name: plugin_name,
+                runtime: Box::new(runtime),
+                priority: 0,
+                block_enabled: false,
+                active: true,
+                path: path.to_path_buf(),
+            })))
+        }
+
+        #[cfg(not(feature = "quickjs-plugin"))]
+        {
+            warn!("QuickJS 插件支持未启用（需启用 quickjs-plugin feature）: {:?}", path);
+            Ok((Self::make_info(path, default_id, false), None))
         }
     }
 
@@ -143,71 +264,6 @@ impl PluginLoader {
         ids
     }
 
-    /// 在独立线程中驱动插件的 plugin_main 循环
-    ///
-    /// 1. 尝试获取 `luo9_init_subscribers` 符号并调用（传递预创建的 subscriber ID）
-    /// 2. 获取 `plugin_main` 符号并调用
-    /// 3. 插件正常退出或 panic 均只记录日志，不影响主程序
-    pub(crate) fn run_plugin(lib: Arc<Library>, plugin_name: &str, subscriber_ids: HashMap<String, usize>) {
-        unsafe {
-            // 尝试调用 luo9_init_subscribers 传递预创建的 subscriber ID
-            // 使用 repr(C) 兼容的裸结构体定义，避免跨 crate 类型匹配问题
-            // 注意：必须与 SDK 的 PluginSubscribers 结构体字段顺序和数量完全一致
-            #[repr(C)]
-            struct PluginSubscribersRaw {
-                message_sub_id: i32,
-                meta_event_sub_id: i32,
-                notice_sub_id: i32,
-                request_sub_id: i32,
-                task_sub_id: i32,
-                send_sub_id: i32,
-            }
-
-            type InitSubscribersFn = unsafe extern "C" fn(*const PluginSubscribersRaw);
-            let init_result = lib.get::<InitSubscribersFn>(b"luo9_init_subscribers\0");
-            match init_result {
-                Ok(init_fn) => {
-                    let subs = PluginSubscribersRaw {
-                        message_sub_id: subscriber_ids.get(TOPIC_MESSAGE).copied().unwrap_or(0) as i32,
-                        meta_event_sub_id: subscriber_ids.get(TOPIC_META_EVENT).copied().unwrap_or(0) as i32,
-                        notice_sub_id: subscriber_ids.get(TOPIC_NOTICE).copied().unwrap_or(0) as i32,
-                        request_sub_id: subscriber_ids.get(TOPIC_REQUEST).copied().unwrap_or(0) as i32,
-                        task_sub_id: subscriber_ids.get(TOPIC_TASK).copied().unwrap_or(0) as i32,
-                        send_sub_id: subscriber_ids.get(TOPIC_SEND).copied().unwrap_or(0) as i32,
-                    };
-                    info!("[loader] 插件 {} 传递 subscriber 映射: msg={}, notice={}, meta={}, request={}, task={}, send={}",
-                        plugin_name, subs.message_sub_id, subs.notice_sub_id, subs.meta_event_sub_id, subs.request_sub_id, subs.task_sub_id, subs.send_sub_id);
-                    init_fn(&subs);
-                    info!("插件 {} 已初始化 subscriber 映射", plugin_name);
-                }
-                Err(_) => {
-                    warn!("插件 {} 未导出 luo9_init_subscribers，将使用默认订阅", plugin_name);
-                }
-            }
-
-            // 获取 plugin_main 符号
-            let plugin_main: libloading::Symbol<unsafe extern "C" fn()> = match lib.get(b"plugin_main\0") {
-                Ok(s) => s,
-                Err(e) => {
-                    error!("插件 {} 获取 plugin_main 失败: {}", plugin_name, e);
-                    return;
-                }
-            };
-
-            info!("插件 {} 线程启动", plugin_name);
-
-            let name = plugin_name.to_string();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                plugin_main();
-            }));
-
-            match result {
-                Ok(()) => info!("插件 {} 已正常退出", name),
-                Err(e) => error!("插件 {} panic: {:?}", name, e),
-            }
-        }
-    }
-
     fn is_plugin_file(path: &Path) -> bool {
         if !path.is_file() {
             return false;
@@ -217,94 +273,39 @@ impl PluginLoader {
             .and_then(|e| e.to_str())
             .unwrap_or("");
 
-        #[cfg(target_os = "linux")]
-        return ext == "so";
-
-        #[cfg(target_os = "windows")]
-        return ext == "dll";
-
-        #[allow(unreachable_code)]
-        false
+        match ext {
+            "dll" | "so" => true,
+            "py" => cfg!(feature = "python-plugin"),
+            "jar" => cfg!(feature = "java-plugin"),
+            "js" => cfg!(feature = "quickjs-plugin"),
+            _ => false,
+        }
     }
 
-    /// 重新加载单个插件（卸载后重新加载）
+    fn make_info(path: &Path, default_id: usize, enabled: bool) -> PluginInfo {
+        let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+        let plugin_name = file_name.to_string();
+        PluginInfo {
+            id: default_id,
+            name: plugin_name,
+            version: String::new(),
+            enabled,
+            path: Some(path.to_string_lossy().to_string()),
+            priority: 0,
+            block_enabled: false,
+            active: false,
+            stats: PluginStats::default(),
+        }
+    }
+
+    /// 重新加载单个插件
     pub fn reload_single(&self, path: &Path, id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
         self.load_single(path, id)
     }
 }
 
 /// 独立的单个插件加载函数（供 enable_plugin / reload_plugin 调用）
-///
-/// 与 `PluginLoader::load_single` 逻辑相同，但不依赖 PluginLoader 实例。
 pub fn load_single_plugin(path: &Path, default_id: usize) -> Result<(PluginInfo, Option<PluginHandle>), String> {
-    unsafe {
-        let lib = Arc::new(
-            Library::new(path)
-                .map_err(|e| format!("加载动态库失败: {}", e))?
-        );
-
-        let has_main = lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok();
-
-        // 提取插件名称（去掉 lib 前缀和 .so/.dll 后缀）
-        let file_name = path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        let plugin_name = extract_display_name(file_name);
-
-        let info = PluginInfo {
-            id: default_id,
-            name: plugin_name.clone(),
-            version: String::new(),
-            enabled: has_main,
-            path: Some(path.to_string_lossy().to_string()),
-            priority: 0,
-            block_enabled: false,
-            active: has_main,
-            stats: PluginStats::default(),
-        };
-
-        let handle = if has_main {
-            let subscriber_ids = PluginLoader::create_subscribers(&plugin_name);
-
-            let lib_clone = Arc::clone(&lib);
-            let subs = subscriber_ids.clone();
-            let name = plugin_name.clone();
-            let thread_handle = std::thread::spawn(move || {
-                PluginLoader::run_plugin(lib_clone, &name, subs);
-            });
-
-            Some(PluginHandle {
-                name: plugin_name,
-                lib,
-                thread_handle: Some(thread_handle),
-                subscriber_ids,
-                priority: 0,
-                block_enabled: false,
-                active: true,
-                path: path.to_path_buf(),
-            })
-        } else {
-            warn!("插件 {} 未导出 plugin_main，跳过", plugin_name);
-            None
-        };
-
-        Ok((info, handle))
-    }
-}
-
-/// 从文件名提取显示名称（去掉 lib 前缀和 .so/.dll 后缀）
-fn extract_display_name(file_name: &str) -> String {
-    // 去掉后缀
-    let name = if file_name.ends_with(".so") {
-        file_name.trim_end_matches(".so")
-    } else if file_name.ends_with(".dll") {
-        file_name.trim_end_matches(".dll")
-    } else {
-        file_name
-    };
-
-    // 去掉 lib 前缀（Linux 惯例）
-    let name = name.strip_prefix("lib").unwrap_or(name);
-
-    name.to_string()
+    let loader = PluginLoader::new(path.parent().unwrap_or(Path::new(".")));
+    loader.load_single(path, default_id)
 }

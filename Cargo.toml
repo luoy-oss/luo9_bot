@@ -1,6 +1,6 @@
 [package]
 name = "luo9_bot"
-version = "0.1.0-beta.8"
+version = "0.1.0-beta.9"
 edition = "2024"
 authors = ["luoy-oss <2557657882@qq.com>"]
 description = "洛玖机器人"
@@ -10,6 +10,12 @@ bot_debug = []
 plugin_dispatch_debug = []
 napcat = []
 plugins = []  # 插件系统支持
+
+# 嵌入式运行时 feature flags（按需启用，未启用不增加依赖）
+python-plugin = ["dep:pyo3"]            # 嵌入 CPython (pyo3)
+java-plugin = ["dep:jni"]              # 嵌入 JVM (jni)
+quickjs-plugin = ["dep:rquickjs"]      # 嵌入 QuickJS (rquickjs)
+
 default = ["napcat"]
 
 [dependencies]
@@ -46,6 +52,11 @@ tower-http = { version = "0.6.9", features = ["cors"] }
 reqwest = { version = "0.13.3", features = ["json", "stream"] }
 dirs = "6"
 async-stream = "0.3"
+
+# 嵌入式运行时依赖（按 feature flag 条件引入）
+pyo3 = { version = "0.25", features = ["auto-initialize"], optional = true }
+jni = { version = "0.21", features = ["invocation"], optional = true }
+rquickjs = { version = "0.9", features = ["bindgen"], optional = true }
 
 
 [lib]

@@ -1,6 +1,6 @@
 # CLAUDE.md — luo9_bot (Rust)
 
-洛玖机器人：基于 Napcat (OneBot v11) 协议的 QQ 机器人，通过 FFI 消息总线支持原生 DLL/SO 插件。
+洛玖机器人：基于 Napcat (OneBot v11) 协议的 QQ 机器人，通过 FFI 消息总线支持原生 DLL/SO 插件，并通过嵌入式运行时支持 Python/Java/Kotlin/JavaScript 多语言插件。
 
 ## 构建与运行
 
@@ -17,6 +17,11 @@ cargo build --release
 # Feature flags
 cargo build --features bot_debug          # 心跳/生命周期调试日志
 cargo build --features plugin_dispatch_debug  # 插件分发调试日志
+
+# 嵌入式运行时（按需启用，未启用不增加依赖）
+cargo build --features python-plugin      # 嵌入 CPython (pyo3)
+cargo build --features java-plugin        # 嵌入 JVM (jni)
+cargo build --features quickjs-plugin     # 嵌入 QuickJS
 ```
 
 ## 架构概览
@@ -38,7 +43,11 @@ Napcat ──WebSocket──> Receiver (server :27001)
                      ├── topic: luo9_task
                      └── topic: luo9_send ──> plugin/sender.rs ──> Sender (client :23001) ──> Napcat API
                           │
-                     插件 (DLL/SO，独立线程)
+                     插件 (PluginRuntime trait)
+                     ├── NativeRuntime (DLL/SO，独立线程)
+                     ├── PythonRuntime (嵌入 CPython，feature gated)
+                     ├── JvmRuntime (嵌入 JVM，feature gated)
+                     └── QuickjsRuntime (嵌入 QuickJS，feature gated)
 ```
 
 ### 三层架构
@@ -47,11 +56,12 @@ Napcat ──WebSocket──> Receiver (server :27001)
 |---|---|---|
 | 宿主 (Host) | `rust/` | WebSocket 连接、事件路由、插件生命周期管理 |
 | 核心库 (Core) | `sdk/core/` → `luo9_core.dll` | FFI 消息总线、命令解析，暴露 `extern "C"` 函数 |
-| SDK | `sdk/rust/`, `sdk/cpp/`, `sdk/python/` | 各语言对 Core FFI 的惯用封装 |
+| SDK | `sdk/rust/`, `sdk/cpp/`, `sdk/go/`, `sdk/python/`, `sdk/java/`, `sdk/kotlin/`, `sdk/nodejs/` | 各语言对 Core FFI 的惯用封装 |
 
 ### 关键设计决策
 
 1. **FFI 消息总线而非 trait 对象**：插件是原生共享库（非 Rust trait），通过 `luo9_core` 的 `extern "C"` 函数进行进程内 pub/sub 通信。这样任何语言（Rust/C++/Python）都能写插件。
+2. **PluginRuntime trait 抽象**：`PluginHandle` 持有 `Box<dyn PluginRuntime>`，支持 NativeRuntime（DLL/SO）、PythonRuntime（PyO3）、JvmRuntime（JNI）、QuickjsRuntime（QuickJS）等多种运行时，分发层无需感知具体类型。
 2. **插件运行在独立 OS 线程**：每个插件的 `plugin_main()` 在自己的 `std::thread` 中执行，阻塞调用不会影响 tokio 运行时。
 3. **总线接收器使用 `spawn_blocking` + `wait_pop`**：避免阻塞 tokio worker 线程，同时不用轮询（无 POLL_INTERVAL）。
 4. **无界队列**：Bus 不丢消息，`Bus::init()` 无容量参数。
@@ -142,8 +152,15 @@ src/
 │   ├── mod.rs           # 插件系统入口：initialize(), priority_dispatch_*()
 │   ├── bus.rs           # FFI 总线封装，topic 常量，start_topic_receiver()
 │   ├── manager.rs       # PluginManager：生命周期管理、启用/禁用/热重载
-│   ├── handle.rs        # PluginHandle：运行时句柄（Library、JoinHandle、subscriber_ids）
-│   ├── loader.rs        # PluginLoader：扫描 .dll/.so，创建 subscriber，spawn plugin_main 线程
+│   ├── handle.rs        # PluginHandle：运行时句柄（Box<dyn PluginRuntime>）
+│   ├── loader.rs        # PluginLoader：扫描 .dll/.so/.py/.jar/.js，按类型创建 Runtime
+│   ├── runtime.rs       # PluginRuntime trait：start/stop/is_alive 抽象
+│   ├── native_runtime.rs # NativeRuntime：DLL/SO 运行时（libloading + plugin_main 线程）
+│   ├── embedded/
+│   │   ├── mod.rs       # 嵌入式运行时模块（feature gated）
+│   │   ├── python.rs    # PythonRuntime：PyO3 嵌入 CPython
+│   │   ├── jvm.rs       # JvmRuntime：JNI 嵌入 JVM
+│   │   └── quickjs.rs   # QuickjsRuntime：嵌入 QuickJS
 │   ├── dispatch.rs      # 优先级分发：DISPATCH_LIST + publish_to 定向推送 + 阻断
 │   ├── data.rs          # PluginData 枚举（Message | MetaEvent | Notice | Request）
 │   ├── sender.rs        # luo9_send 接收器，路由发送请求到 Sender
