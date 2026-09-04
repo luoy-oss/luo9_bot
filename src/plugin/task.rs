@@ -1,8 +1,8 @@
 // src/plugin/task.rs
 // luo9_task 总线接收 + 轻量 cron 调度器（6 字段，支持 ? L W #）
 
-use std::collections::HashSet;
 use chrono::{Datelike, NaiveDate, Timelike};
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -11,12 +11,12 @@ use super::bus;
 // ── Cron 字段类型 ──────────────────────────────────────────────
 
 enum FieldSet {
-    Any,                                    // * 或 ?
-    Values(HashSet<u32>),                   // 具体值集合
-    LastDay,                                // L（当月最后一天）
-    LastWeekday(u32),                       // 5L（当月最后一个周五）
-    NearestWeekday(u32),                    // 15W（离 15 号最近的工作日）
-    NthWeekday { weekday: u32, n: u32 },    // 2#3（当月第 3 个周一）
+    Any,                                 // * 或 ?
+    Values(HashSet<u32>),                // 具体值集合
+    LastDay,                             // L（当月最后一天）
+    LastWeekday(u32),                    // 5L（当月最后一个周五）
+    NearestWeekday(u32),                 // 15W（离 15 号最近的工作日）
+    NthWeekday { weekday: u32, n: u32 }, // 2#3（当月第 3 个周一）
 }
 
 impl FieldSet {
@@ -27,13 +27,13 @@ impl FieldSet {
             FieldSet::LastDay => value == ctx.last_day_of_month,
             FieldSet::LastWeekday(w) => {
                 let last = last_weekday_of_month(ctx.year, ctx.month, *w);
-                last.map_or(false, |d| d == value)
+                last == Some(value)
             }
             FieldSet::NearestWeekday(day) => {
-                nearest_weekday(ctx.year, ctx.month, *day).map_or(false, |d| d == value)
+                nearest_weekday(ctx.year, ctx.month, *day) == Some(value)
             }
             FieldSet::NthWeekday { weekday, n } => {
-                nth_weekday(ctx.year, ctx.month, *weekday, *n).map_or(false, |d| d == value)
+                nth_weekday(ctx.year, ctx.month, *weekday, *n) == Some(value)
             }
         }
     }
@@ -43,6 +43,16 @@ struct MatchContext {
     year: i32,
     month: u32,
     last_day_of_month: u32,
+}
+
+struct CronTime {
+    second: u32,
+    minute: u32,
+    hour: u32,
+    day: u32,
+    month: u32,
+    weekday: u32,
+    year: i32,
 }
 
 // ── Cron 表达式解析 ────────────────────────────────────────────
@@ -60,7 +70,11 @@ impl CronExpr {
     fn parse(expr: &str) -> Option<Self> {
         let fields: Vec<&str> = expr.split_whitespace().collect();
         if fields.len() != 6 {
-            warn!("[task] cron 表达式需要 6 个字段（秒 分 时 日 月 周），实际 {} 个: {}", fields.len(), expr);
+            warn!(
+                "[task] cron 表达式需要 6 个字段（秒 分 时 日 月 周），实际 {} 个: {}",
+                fields.len(),
+                expr
+            );
             return None;
         }
         Some(Self {
@@ -73,19 +87,22 @@ impl CronExpr {
         })
     }
 
-    fn matches(&self, sec: u32, min: u32, hour: u32, day: u32, month: u32, weekday: u32, year: i32) -> bool {
-        let last_day = last_day_of_month(year, month);
-        let ctx = MatchContext { year, month, last_day_of_month: last_day };
+    fn matches(&self, time: &CronTime) -> bool {
+        let ctx = MatchContext {
+            year: time.year,
+            month: time.month,
+            last_day_of_month: last_day_of_month(time.year, time.month),
+        };
 
         // 日和周的互斥规则：任一为 ? 则跳过该字段
-        let day_ok = self.days.matches(day, &ctx);
-        let wd = if weekday == 0 { 7 } else { weekday }; // chrono: 0=Sun → 7
+        let day_ok = self.days.matches(time.day, &ctx);
+        let wd = if time.weekday == 0 { 7 } else { time.weekday }; // chrono: 0=Sun → 7
         let wd_ok = self.weekdays.matches(wd, &ctx);
 
-        self.seconds.matches(sec, &ctx)
-            && self.minutes.matches(min, &ctx)
-            && self.hours.matches(hour, &ctx)
-            && self.months.contains(&month)
+        self.seconds.matches(time.second, &ctx)
+            && self.minutes.matches(time.minute, &ctx)
+            && self.hours.matches(time.hour, &ctx)
+            && self.months.contains(&time.month)
             && day_ok
             && wd_ok
     }
@@ -98,28 +115,34 @@ fn parse_std_field(field: &str, min: u32, max: u32) -> Option<FieldSet> {
         return Some(FieldSet::Any);
     }
     let mut set = HashSet::new();
-    for part in field.split(',') {
-        parse_range_part(part, min, max, &mut set)?;
-    }
+    field
+        .split(',')
+        .try_for_each(|part| parse_range_part(part, min, max, &mut set))?;
     Some(FieldSet::Values(set))
 }
 
 fn parse_range_part(part: &str, min: u32, max: u32, set: &mut HashSet<u32>) -> Option<()> {
     if let Some((base, step_str)) = part.split_once('/') {
         let step: u32 = step_str.parse().ok()?;
-        if step == 0 { return None; }
-        let start = if base == "*" || base.is_empty() { min } else { base.parse().ok()? };
+        if step == 0 {
+            return None;
+        }
+        let start = if base == "*" || base.is_empty() {
+            min
+        } else {
+            base.parse().ok()?
+        };
         let mut v = start;
         while v <= max {
             set.insert(v);
             v += step;
         }
     } else if part == "*" {
-        for v in min..=max { set.insert(v); }
+        set.extend(min..=max);
     } else if let Some((a, b)) = part.split_once('-') {
         let a: u32 = a.parse().ok()?;
         let b: u32 = b.parse().ok()?;
-        for v in a..=b { set.insert(v); }
+        set.extend(a..=b);
     } else {
         set.insert(part.parse().ok()?);
     }
@@ -138,7 +161,9 @@ fn parse_day_field(field: &str) -> Option<FieldSet> {
     // 检查 W 修饰符
     if let Some(day_str) = field.strip_suffix('W') {
         let day: u32 = day_str.parse().ok()?;
-        if day < 1 || day > 31 { return None; }
+        if !(1..=31).contains(&day) {
+            return None;
+        }
         return Some(FieldSet::NearestWeekday(day));
     }
     parse_std_field(field, 1, 31)
@@ -151,21 +176,30 @@ fn parse_month_field(field: &str) -> Option<HashSet<u32>> {
         return Some((1..=12).collect());
     }
     let mut set = HashSet::new();
-    for part in field.split(',') {
-        // 尝试名称替换
-        let part = normalize_month_name(part);
-        parse_range_part(&part, 1, 12, &mut set)?;
-    }
+    field.split(',').try_for_each(|part| {
+        let normalized = normalize_month_name(part);
+        parse_range_part(&normalized, 1, 12, &mut set)
+    })?;
     Some(set)
 }
 
 fn normalize_month_name(s: &str) -> String {
     match s.to_uppercase().as_str() {
-        "JAN" => "1", "FEB" => "2", "MAR" => "3", "APR" => "4",
-        "MAY" => "5", "JUN" => "6", "JUL" => "7", "AUG" => "8",
-        "SEP" => "9", "OCT" => "10", "NOV" => "11", "DEC" => "12",
+        "JAN" => "1",
+        "FEB" => "2",
+        "MAR" => "3",
+        "APR" => "4",
+        "MAY" => "5",
+        "JUN" => "6",
+        "JUL" => "7",
+        "AUG" => "8",
+        "SEP" => "9",
+        "OCT" => "10",
+        "NOV" => "11",
+        "DEC" => "12",
         _ => return s.to_string(),
-    }.to_string()
+    }
+    .to_string()
 }
 
 // ── 周字段解析（支持 ? L # 星期名）────────────────────────────
@@ -178,13 +212,17 @@ fn parse_weekday_field(field: &str) -> Option<FieldSet> {
     if let Some((wd_str, n_str)) = field.split_once('#') {
         let weekday = normalize_weekday_name(wd_str).parse().ok()?;
         let n: u32 = n_str.parse().ok()?;
-        if weekday > 7 || n < 1 || n > 5 { return None; }
+        if weekday > 7 || !(1..=5).contains(&n) {
+            return None;
+        }
         return Some(FieldSet::NthWeekday { weekday, n });
     }
     // 检查 L 修饰符: 5L = 当月最后一个周五
     if let Some(wd_str) = field.strip_suffix('L') {
         let weekday = normalize_weekday_name(wd_str).parse().ok()?;
-        if weekday > 7 { return None; }
+        if weekday > 7 {
+            return None;
+        }
         return Some(FieldSet::LastWeekday(weekday));
     }
     // 普通值
@@ -196,30 +234,46 @@ fn parse_std_weekday_field(field: &str) -> Option<FieldSet> {
         return Some(FieldSet::Any);
     }
     let mut set = HashSet::new();
-    for part in field.split(',') {
+    field.split(',').try_for_each(|part| {
         if let Some((a, b)) = part.split_once('-') {
             let a = normalize_weekday_name(a).parse::<u32>().ok()?;
             let b = normalize_weekday_name(b).parse::<u32>().ok()?;
-            for v in a..=b { set.insert(v); }
+            set.extend(a..=b);
         } else if let Some((base, step_str)) = part.split_once('/') {
             let step: u32 = step_str.parse().ok()?;
-            if step == 0 { return None; }
-            let start = if base == "*" { 0 } else { normalize_weekday_name(base).parse().ok()? };
+            if step == 0 {
+                return None;
+            }
+            let start = if base == "*" {
+                0
+            } else {
+                normalize_weekday_name(base).parse().ok()?
+            };
             let mut v = start;
-            while v <= 7 { set.insert(v); v += step; }
+            while v <= 7 {
+                set.insert(v);
+                v += step;
+            }
         } else {
             set.insert(normalize_weekday_name(part).parse().ok()?);
         }
-    }
+        Some(())
+    })?;
     Some(FieldSet::Values(set))
 }
 
 fn normalize_weekday_name(s: &str) -> String {
     match s.to_uppercase().as_str() {
-        "SUN" => "0", "MON" => "1", "TUE" => "2", "WED" => "3",
-        "THU" => "4", "FRI" => "5", "SAT" => "6",
+        "SUN" => "0",
+        "MON" => "1",
+        "TUE" => "2",
+        "WED" => "3",
+        "THU" => "4",
+        "FRI" => "5",
+        "SAT" => "6",
         _ => return s.to_string(),
-    }.to_string()
+    }
+    .to_string()
 }
 
 // ── 日期计算辅助函数 ──────────────────────────────────────────
@@ -232,7 +286,13 @@ fn days_in_month(year: i32, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
-        2 => if is_leap_year(year) { 29 } else { 28 },
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
         _ => 30,
     }
 }
@@ -258,8 +318,20 @@ fn nearest_weekday(year: i32, month: u32, day: u32) -> Option<u32> {
     let date = NaiveDate::from_ymd_opt(year, month, day)?;
     let wd = date.weekday().num_days_from_sunday();
     match wd {
-        0 => if day < dim { Some(day + 1) } else { Some(day - 2) }, // Sun → Mon (or Fri if month end)
-        6 => if day > 1 { Some(day - 1) } else { Some(day + 2) },  // Sat → Fri (or Mon if month start)
+        0 => {
+            if day < dim {
+                Some(day + 1)
+            } else {
+                Some(day - 2)
+            }
+        } // Sun → Mon (or Fri if month end)
+        6 => {
+            if day > 1 {
+                Some(day - 1)
+            } else {
+                Some(day + 2)
+            }
+        } // Sat → Fri (or Mon if month start)
         _ => Some(day),
     }
 }
@@ -271,7 +343,11 @@ fn nth_weekday(year: i32, month: u32, weekday: u32, n: u32) -> Option<u32> {
     let first_wd = if first_wd == 0 { 7 } else { first_wd };
     let offset = (weekday as i32 - first_wd as i32 + 7) % 7;
     let day = 1 + offset as u32 + (n - 1) * 7;
-    if day <= days_in_month(year, month) { Some(day) } else { None }
+    if day <= days_in_month(year, month) {
+        Some(day)
+    } else {
+        None
+    }
 }
 
 // ── 调度任务 ───────────────────────────────────────────────────
@@ -287,8 +363,7 @@ struct ScheduledTask {
 
 static SCHEDULER_TX: std::sync::OnceLock<mpsc::UnboundedSender<ScheduledTask>> =
     std::sync::OnceLock::new();
-static CANCEL_TX: std::sync::OnceLock<mpsc::UnboundedSender<String>> =
-    std::sync::OnceLock::new();
+static CANCEL_TX: std::sync::OnceLock<mpsc::UnboundedSender<String>> = std::sync::OnceLock::new();
 
 pub fn start_scheduler() {
     let (tx, mut rx) = mpsc::unbounded_channel::<ScheduledTask>();
@@ -323,16 +398,20 @@ pub fn start_scheduler() {
                 // 每秒检查
                 _ = interval.tick() => {
                     let now = chrono::Local::now();
-                    let sec = now.second();
-                    let minute = now.minute();
-                    let hour = now.hour();
-                    let day = now.day();
-                    let month = now.month();
-                    let year = now.year();
-                    let weekday = now.weekday().num_days_from_sunday();
+                    let time = CronTime {
+                        second: now.second(),
+                        minute: now.minute(),
+                        hour: now.hour(),
+                        day: now.day(),
+                        month: now.month(),
+                        weekday: now.weekday().num_days_from_sunday(),
+                        year: now.year(),
+                    };
 
-                    for task in &tasks {
-                        if task.cron.matches(sec, minute, hour, day, month, weekday, year) {
+                    tasks
+                        .iter()
+                        .filter(|task| task.cron.matches(&time))
+                        .for_each(|task| {
                             info!("[task] 定时任务触发: name={}", task.name);
                             let event = serde_json::json!({
                                 "event": "tick",
@@ -342,8 +421,7 @@ pub fn start_scheduler() {
                             if let Err(e) = bus::Bus::topic(bus::TOPIC_TASK).publish(&event.to_string()) {
                                 error!("[task] 发布事件失败: {:?}", e);
                             }
-                        }
-                    }
+                        });
                 }
             }
         }
@@ -407,10 +485,10 @@ fn handle_task(json: &str) {
                 warn!("[task] cancel 缺少 task_name");
                 return;
             }
-            if let Some(tx) = CANCEL_TX.get() {
-                if let Err(e) = tx.send(name) {
-                    error!("[task] 发送取消请求失败: {}", e);
-                }
+            if let Some(tx) = CANCEL_TX.get()
+                && let Err(e) = tx.send(name)
+            {
+                error!("[task] 发送取消请求失败: {}", e);
             }
         }
         "tick" => {
