@@ -337,13 +337,10 @@ impl PluginLoader {
 
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-        match ext {
-            "dll" | "so" => true,
-            "py" => cfg!(feature = "python-plugin"),
-            "jar" => cfg!(feature = "java-plugin"),
-            "js" => cfg!(feature = "quickjs-plugin"),
-            _ => false,
-        }
+        matches!(ext, "dll" | "so")
+            || (ext == "py" && cfg!(feature = "python-plugin"))
+            || (ext == "jar" && cfg!(feature = "java-plugin"))
+            || (ext == "js" && cfg!(feature = "quickjs-plugin"))
     }
 
     fn make_info(path: &Path, default_id: usize, enabled: bool) -> PluginInfo {
