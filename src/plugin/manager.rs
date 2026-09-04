@@ -87,6 +87,11 @@ impl PluginManager {
         &self.plugin_infos
     }
 
+    pub fn clear(&mut self) {
+        self.plugin_infos.clear();
+        self.handles.clear();
+    }
+
     /// 按名称获取插件信息
     pub fn get_plugin_info(&self, name: &str) -> Option<&PluginInfo> {
         self.plugin_infos.iter().find(|p| p.name == name)

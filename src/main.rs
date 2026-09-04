@@ -7,25 +7,27 @@ use luo9_bot::error::Result;
 async fn main() -> Result<()> {
     loop {
         info!("正在初始化应用...");
-        let ctx: LNContext = LNContext::initialize().await?;
+        let mut ctx: LNContext = LNContext::initialize().await?;
         
         // 启动 WebUI（不依赖 WebSocket 连接）
         let webui_cfg = ctx.config.webui.clone();
         let plugin_dir = ctx.config.plugins.plugin_dir.clone();
         let ws_connected = ctx.tx.is_some();
 
-        if webui_cfg.enabled {
-            tokio::spawn(async move {
+        let webui_task = if webui_cfg.enabled {
+            Some(tokio::spawn(async move {
                 luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token, ws_connected).await;
-            });
-        }
+            }))
+        } else {
+            None
+        };
 
         ctx.run().await?;
         
 
         // 启动消息接收器
         let rx = ctx.rx.clone();
-        let rx_task = tokio::spawn(async move {
+        let mut rx_task = tokio::spawn(async move {
             info!("开始监听 Napcat 推送的消息...");
 
             loop {
@@ -48,13 +50,21 @@ async fn main() -> Result<()> {
         let mut restart_rx = luo9_bot::RESTART_TX.subscribe();
 
         tokio::select! {
-            _ = rx_task => {
+            _ = &mut rx_task => {
                 info!("接收任务结束");
                 break;
             }
             _ = restart_rx.changed() => {
                 if *restart_rx.borrow() {
                     info!("收到重启信号，正在重启...");
+                    rx_task.abort();
+                    let _ = rx_task.await;
+
+                    if let Some(webui_task) = webui_task {
+                        webui_task.abort();
+                        let _ = webui_task.await;
+                    }
+
                     ctx.shutdown().await;
                     // 重置信号
                     luo9_bot::RESTART_TX.send(false).ok();

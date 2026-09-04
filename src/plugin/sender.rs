@@ -34,6 +34,11 @@ pub async fn init_sender(sender: Sender) {
     info!("bus 消息发送器已初始化");
 }
 
+pub async fn clear_sender() {
+    let mut guard = GLOBAL_SENDER.lock().await;
+    *guard = None;
+}
+
 // ── 接收器 ─────────────────────────────────────────────────────
 
 pub fn start_send_receiver() {

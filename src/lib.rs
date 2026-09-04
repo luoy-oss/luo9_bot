@@ -21,6 +21,7 @@ use config::LNConfig;
 use error::Result;
 use tracing::{info, warn};
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
 use plugin as Plugin;
 
@@ -38,6 +39,8 @@ pub struct LNContext {
     pub config: LNConfig,
     pub rx: connection::Receiver,
     pub tx: Option<connection::Sender>,
+    receiver_task: Option<JoinHandle<()>>,
+    retry_task: Option<JoinHandle<()>>,
 }
 impl LNContext {
     pub async fn initialize() -> Result<Self> {
@@ -96,13 +99,13 @@ impl LNContext {
         }
 
         // 启动后台重试任务（如果初始连接失败）
-        if tx.is_none() {
+        let retry_task = if tx.is_none() {
             let ws_host = config.napcat.ws_server_host.clone();
             let ws_port = config.napcat.ws_server_port;
             let timeout = config.napcat.timeout_seconds;
             let token = config.napcat.token.clone();
 
-            tokio::spawn(async move {
+            Some(tokio::spawn(async move {
                 info!("启动 WebSocket 后台重试任务...");
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -120,8 +123,10 @@ impl LNContext {
                         }
                     }
                 }
-            });
-        }
+            }))
+        } else {
+            None
+        };
 
         info!("应用初始化完成");
 
@@ -129,19 +134,21 @@ impl LNContext {
             config,
             rx,
             tx,
+            receiver_task: None,
+            retry_task,
         })
     }
     
     /// 启动应用
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         info!("启动 Napcat Bridge...");
 
         let rx = self.rx.clone();
-        tokio::spawn(async move {
+        self.receiver_task = Some(tokio::spawn(async move {
             if let Err(e) = rx.start().await {
                 tracing::error!("接收器启动失败: {}", e);
             }
-        });
+        }));
 
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
@@ -170,8 +177,18 @@ impl LNContext {
     }
 
     /// 释放资源（用于重启）
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&mut self) {
         info!("正在释放资源...");
+
+        if let Some(receiver_task) = self.receiver_task.take() {
+            receiver_task.abort();
+            let _ = receiver_task.await;
+        }
+
+        if let Some(retry_task) = self.retry_task.take() {
+            retry_task.abort();
+            let _ = retry_task.await;
+        }
 
         // 禁用所有插件
         let mut manager = plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
@@ -185,7 +202,11 @@ impl LNContext {
                 }
             }
         }
+        manager.clear();
         drop(manager);
+
+        plugin::update_dispatch_list(Vec::new());
+        plugin::sender::clear_sender().await;
 
         info!("资源释放完成");
     }

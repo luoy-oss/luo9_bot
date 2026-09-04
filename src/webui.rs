@@ -381,7 +381,8 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
 
     // 启动镜像健康检查任务（后台预热）
     let cache_for_check = mirror_cache.clone();
-    tokio::spawn(async move {
+    let mut background_tasks = tokio::task::JoinSet::new();
+    background_tasks.spawn(async move {
         // 首次立即检查
         check_mirrors_health(&cache_for_check).await;
 
@@ -398,7 +399,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     // 启动测试版信息预加载任务（后台预热）
     let mirror_cache_for_preload = mirror_cache.clone();
     let user_selected_mirror_for_preload = user_selected_mirror.clone();
-    tokio::spawn(async move {
+    background_tasks.spawn(async move {
         // 等待镜像健康检查完成
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
@@ -516,7 +517,9 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     let actual_port = listener.local_addr().unwrap().port();
     info!("WebUI 启动于 http://{}:{}?token={}", host, actual_port, token);
 
-    axum::serve(listener, app).await.unwrap();
+    if let Err(error) = axum::serve(listener, app).await {
+        tracing::error!("WebUI 服务异常退出: {}", error);
+    }
 }
 
 // ========== 鉴权中间件 ==========
@@ -1571,6 +1574,16 @@ async fn api_plugin_delete(
 
     // 删除版本信息
     remove_installed_version(&state.plugin_dir, &name);
+
+    match crate::config::LNConfig::load() {
+        Ok(mut config) => {
+            config.plugins.plugins.retain(|entry| entry.name != name);
+            if let Err(error) = config.save() {
+                warn!("删除插件配置失败: {}", error);
+            }
+        }
+        Err(error) => warn!("加载插件配置失败: {}", error),
+    }
 
     json_ok(&format!("插件 {name} 已卸载并删除 {deleted} 个文件"))
 }

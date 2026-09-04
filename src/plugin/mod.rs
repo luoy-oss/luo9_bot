@@ -30,10 +30,13 @@ pub use dispatch::{
 };
 
 use tracing::{error, info};
+use std::sync::Once;
 use crate::message::Message;
 use crate::event::MetaEvent;
 use crate::notice::Notice;
 use crate::request::Request;
+
+static BACKGROUND_TASKS: Once = Once::new();
 
 /// 初始化插件系统
 pub async fn initialize(plugins_dir: &str, config_entries: &[crate::config::PluginEntry]) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,8 +49,10 @@ pub async fn initialize(plugins_dir: &str, config_entries: &[crate::config::Plug
     }
 
     // 先启动总线接收器，再加载插件，避免插件发布消息时接收器尚未订阅
-    task::start_task_receiver();
-    sender::start_send_receiver();
+    BACKGROUND_TASKS.call_once(|| {
+        task::start_task_receiver();
+        sender::start_send_receiver();
+    });
 
     // 加载插件（加载后自动启动各插件的 plugin_main 线程，并创建 subscriber）
     let plugin_loader = PluginLoader::new(plugins_dir);
