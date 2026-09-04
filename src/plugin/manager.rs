@@ -1,13 +1,13 @@
 // src/plugin/manager.rs
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
-use serde::Serialize;
+use tracing::{error, info, warn};
 
+use super::dispatch::update_dispatch_list;
 use super::handle::PluginHandle;
 use super::loader::load_single_plugin;
-use super::dispatch::update_dispatch_list;
 
 /// 插件性能统计
 #[derive(Debug, Clone, Default)]
@@ -62,6 +62,12 @@ pub struct PluginManager {
     handles: HashMap<String, PluginHandle>,
 }
 
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PluginManager {
     pub fn new() -> Self {
         Self {
@@ -112,11 +118,12 @@ impl PluginManager {
 
     /// 将所有空版本的插件标记为 Unknown
     pub fn mark_unknown_versions(&mut self) {
-        for info in &mut self.plugin_infos {
-            if info.version.is_empty() {
+        self.plugin_infos
+            .iter_mut()
+            .filter(|info| info.version.is_empty())
+            .for_each(|info| {
                 info.version = "Unknown".to_string();
-            }
-        }
+            });
     }
 
     /// 禁用插件（运行时热禁用）
@@ -128,7 +135,9 @@ impl PluginManager {
     /// 5. 更新分发列表
     pub async fn disable_plugin(&mut self, name: &str, force: bool) -> Result<String, String> {
         // 获取句柄
-        let handle = self.handles.get_mut(name)
+        let handle = self
+            .handles
+            .get_mut(name)
             .ok_or_else(|| format!("插件 {name} 不存在"))?;
 
         if !handle.active {
@@ -187,10 +196,8 @@ impl PluginManager {
         config_entries: &[crate::config::PluginEntry],
     ) -> Result<String, String> {
         // 检查是否已有同名且 active 的插件
-        if let Some(handle) = self.handles.get(name) {
-            if handle.active {
-                return Err(format!("插件 {name} 已经在运行中"));
-            }
+        if self.handles.get(name).is_some_and(|handle| handle.active) {
+            return Err(format!("插件 {name} 已经在运行中"));
         }
 
         // 移除 inactive 的旧句柄（释放 Runtime）
@@ -207,8 +214,8 @@ impl PluginManager {
 
         // 加载插件
         let next_id = self.plugin_infos.len();
-        let (mut info, handle_opt) = load_single_plugin(path, next_id)
-            .map_err(|e| format!("加载插件 {name} 失败: {e}"))?;
+        let (mut info, handle_opt) =
+            load_single_plugin(path, next_id).map_err(|e| format!("加载插件 {name} 失败: {e}"))?;
 
         let Some(mut handle) = handle_opt else {
             return Err(format!("插件 {name} 未导出 plugin_main"));
@@ -245,24 +252,25 @@ impl PluginManager {
         config_entries: &[crate::config::PluginEntry],
     ) -> Result<String, String> {
         // 获取旧句柄的 path
-        let path = self.handles.get(name)
+        let path = self
+            .handles
+            .get(name)
             .map(|h| h.path.clone())
             .or_else(|| {
-                self.plugin_infos.iter()
+                self.plugin_infos
+                    .iter()
                     .find(|p| p.name == name)
-                    .and_then(|p| p.path.as_ref().map(|s| PathBuf::from(s)))
+                    .and_then(|p| p.path.as_ref().map(PathBuf::from))
             })
             .ok_or_else(|| format!("插件 {name} 不存在，无法获取路径"))?;
 
         // 禁用（如果 active，强制等待线程退出以确保DLL解锁）
-        if let Some(handle) = self.handles.get(name) {
-            if handle.active {
-                match self.disable_plugin(name, true).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("禁用插件 {} 失败: {}", name, e);
-                        return Err(format!("禁用插件 {name} 失败: {e}"));
-                    }
+        if self.handles.get(name).is_some_and(|handle| handle.active) {
+            match self.disable_plugin(name, true).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("禁用插件 {} 失败: {}", name, e);
+                    return Err(format!("禁用插件 {name} 失败: {e}"));
                 }
             }
         }
@@ -277,7 +285,9 @@ impl PluginManager {
 
     /// 获取优先级分发列表（按优先级降序）
     pub fn get_dispatch_list(&self) -> Vec<DispatchEntry> {
-        let mut entries: Vec<DispatchEntry> = self.handles.values()
+        let mut entries: Vec<DispatchEntry> = self
+            .handles
+            .values()
             .filter(|h| h.active)
             .map(|h| DispatchEntry {
                 name: h.name.clone(),
@@ -324,7 +334,11 @@ impl PluginManager {
     /// 获取统计信息
     pub fn get_stats(&self) -> String {
         let active = self.handles.values().filter(|h| h.active).count();
-        format!("插件统计: 总数={}, 活跃={}", self.plugin_infos.len(), active)
+        format!(
+            "插件统计: 总数={}, 活跃={}",
+            self.plugin_infos.len(),
+            active
+        )
     }
 
     /// 更新插件消息统计
@@ -376,23 +390,31 @@ impl PluginManager {
 
     /// 获取所有插件统计信息
     pub fn get_all_stats(&self) -> Vec<PluginStatsInfo> {
-        self.plugin_infos.iter().map(|p| {
-            let total_count = p.stats.message_count + p.stats.notice_count + p.stats.meta_event_count + p.stats.request_count;
-            PluginStatsInfo {
-                name: p.name.clone(),
-                active: p.active,
-                message_count: p.stats.message_count,
-                notice_count: p.stats.notice_count,
-                meta_event_count: p.stats.meta_event_count,
-                request_count: p.stats.request_count,
-                avg_response_time_ms: if total_count > 0 {
-                    p.stats.total_response_time_us as f64 / total_count as f64 / 1000.0
-                } else { 0.0 },
-                last_response_time_ms: p.stats.last_response_time_us as f64 / 1000.0,
-                error_count: p.stats.error_count,
-                last_active_secs: p.stats.last_active.map(|t| t.elapsed().as_secs()),
-            }
-        }).collect()
+        self.plugin_infos
+            .iter()
+            .map(|p| {
+                let total_count = p.stats.message_count
+                    + p.stats.notice_count
+                    + p.stats.meta_event_count
+                    + p.stats.request_count;
+                PluginStatsInfo {
+                    name: p.name.clone(),
+                    active: p.active,
+                    message_count: p.stats.message_count,
+                    notice_count: p.stats.notice_count,
+                    meta_event_count: p.stats.meta_event_count,
+                    request_count: p.stats.request_count,
+                    avg_response_time_ms: if total_count > 0 {
+                        p.stats.total_response_time_us as f64 / total_count as f64 / 1000.0
+                    } else {
+                        0.0
+                    },
+                    last_response_time_ms: p.stats.last_response_time_us as f64 / 1000.0,
+                    error_count: p.stats.error_count,
+                    last_active_secs: p.stats.last_active.map(|t| t.elapsed().as_secs()),
+                }
+            })
+            .collect()
     }
 }
 
@@ -426,22 +448,31 @@ pub async fn init_global_manager(
     config_entries: &[crate::config::PluginEntry],
 ) {
     let mut manager = GLOBAL_PLUGIN_MANAGER.lock().await;
-    for mut info in infos {
-        // 从配置中应用 priority/block_enabled
-        if let Some(entry) = config_entries.iter().find(|e| e.name == info.name) {
-            info.priority = entry.priority;
-            info.block_enabled = entry.block_enabled;
-        }
-        manager.register_plugin(info);
-    }
-    for mut handle in handles {
-        // 从配置中应用 priority/block_enabled
-        if let Some(entry) = config_entries.iter().find(|e| e.name == handle.name) {
-            handle.priority = entry.priority;
-            handle.block_enabled = entry.block_enabled;
-        }
-        manager.register_handle(handle);
-    }
+    infos
+        .into_iter()
+        .map(|mut info| {
+            if let Some(entry) = config_entries.iter().find(|entry| entry.name == info.name) {
+                info.priority = entry.priority;
+                info.block_enabled = entry.block_enabled;
+            }
+            info
+        })
+        .for_each(|info| manager.register_plugin(info));
+
+    handles
+        .into_iter()
+        .map(|mut handle| {
+            if let Some(entry) = config_entries
+                .iter()
+                .find(|entry| entry.name == handle.name)
+            {
+                handle.priority = entry.priority;
+                handle.block_enabled = entry.block_enabled;
+            }
+            handle
+        })
+        .for_each(|handle| manager.register_handle(handle));
+
     info!("全局插件管理器初始化完成");
 }
 
