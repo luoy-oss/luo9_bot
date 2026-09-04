@@ -18,24 +18,24 @@ pub fn update_dispatch_list(entries: Vec<DispatchEntry>) {
     match DISPATCH_LIST.write() {
         Ok(mut list) => {
             info!("[dispatch] 分发列表更新，共 {} 个活跃插件:", entries.len());
-            for e in &entries {
-                let msg = e
+            entries.iter().for_each(|entry| {
+                let msg = entry
                     .message_sub_id
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| "无".into());
-                let notice = e
+                let notice = entry
                     .notice_sub_id
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| "无".into());
-                let meta = e
+                let meta = entry
                     .meta_event_sub_id
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| "无".into());
                 info!(
                     "  - {} (priority={}, block={}, msg_sub={}, notice_sub={}, meta_sub={})",
-                    e.name, e.priority, e.block_enabled, msg, notice, meta
+                    entry.name, entry.priority, entry.block_enabled, msg, notice, meta
                 );
-            }
+            });
             *list = entries;
         }
         Err(e) => {
