@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::plugin::runtime::PluginRuntime;
 
@@ -23,7 +23,8 @@ pub struct QuickjsRuntime {
 
 impl QuickjsRuntime {
     pub fn new(path: &Path) -> Result<Self, String> {
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
         let name = file_name.trim_end_matches(".js").to_string();
@@ -120,10 +121,8 @@ fn run_quickjs_plugin(
             // luo9_bus_init
             core.set(
                 "luo9_bus_init",
-                rquickjs::Function::new(ctx.clone(), || {
-                    unsafe { luo9_core::luo9_bus_init() }
-                })
-                .map_err(|e| format!("注册 luo9_bus_init 失败: {}", e))?,
+                rquickjs::Function::new(ctx.clone(), || unsafe { luo9_core::luo9_bus_init() })
+                    .map_err(|e| format!("注册 luo9_bus_init 失败: {}", e))?,
             )
             .map_err(|e| format!("设置 luo9_bus_init 失败: {}", e))?;
 
@@ -200,8 +199,8 @@ fn run_quickjs_plugin(
             // luo9_bus_free_string(ptr)
             core.set(
                 "luo9_bus_free_string",
-                rquickjs::Function::new(ctx.clone(), |ptr: u64| {
-                    unsafe { luo9_core::luo9_bus_free_string(ptr as *mut std::ffi::c_char) }
+                rquickjs::Function::new(ctx.clone(), |ptr: u64| unsafe {
+                    luo9_core::luo9_bus_free_string(ptr as *mut std::ffi::c_char)
                 })
                 .map_err(|e| format!("注册 luo9_bus_free_string 失败: {}", e))?,
             )
@@ -234,8 +233,8 @@ fn run_quickjs_plugin(
             // luo9_command_free(handle)
             core.set(
                 "luo9_command_free",
-                rquickjs::Function::new(ctx.clone(), |handle: u64| {
-                    unsafe { luo9_core::luo9_command_free(handle as *mut std::ffi::c_void) }
+                rquickjs::Function::new(ctx.clone(), |handle: u64| unsafe {
+                    luo9_core::luo9_command_free(handle as *mut std::ffi::c_void)
                 })
                 .map_err(|e| format!("注册 luo9_command_free 失败: {}", e))?,
             )
@@ -282,10 +281,8 @@ fn run_quickjs_plugin(
             // luo9_command_has_args(handle) -> int
             core.set(
                 "luo9_command_has_args",
-                rquickjs::Function::new(ctx.clone(), |handle: u64| {
-                    unsafe {
-                        luo9_core::luo9_command_has_args(handle as *mut std::ffi::c_void)
-                    }
+                rquickjs::Function::new(ctx.clone(), |handle: u64| unsafe {
+                    luo9_core::luo9_command_has_args(handle as *mut std::ffi::c_void)
                 })
                 .map_err(|e| format!("注册 luo9_command_has_args 失败: {}", e))?,
             )
@@ -294,10 +291,8 @@ fn run_quickjs_plugin(
             // luo9_command_args_count(handle) -> int
             core.set(
                 "luo9_command_args_count",
-                rquickjs::Function::new(ctx.clone(), |handle: u64| {
-                    unsafe {
-                        luo9_core::luo9_command_args_count(handle as *mut std::ffi::c_void)
-                    }
+                rquickjs::Function::new(ctx.clone(), |handle: u64| unsafe {
+                    luo9_core::luo9_command_args_count(handle as *mut std::ffi::c_void)
                 })
                 .map_err(|e| format!("注册 luo9_command_args_count 失败: {}", e))?,
             )
@@ -308,10 +303,7 @@ fn run_quickjs_plugin(
                 "luo9_command_get_arg",
                 rquickjs::Function::new(ctx.clone(), |handle: u64, index: u32| {
                     let ptr = unsafe {
-                        luo9_core::luo9_command_get_arg(
-                            handle as *mut std::ffi::c_void,
-                            index,
-                        )
+                        luo9_core::luo9_command_get_arg(handle as *mut std::ffi::c_void, index)
                     };
                     match unsafe { c_ptr_to_opt_string(ptr) } {
                         Some(s) => {
@@ -328,8 +320,8 @@ fn run_quickjs_plugin(
             // luo9_free_string(ptr)
             core.set(
                 "luo9_free_string",
-                rquickjs::Function::new(ctx.clone(), |ptr: u64| {
-                    unsafe { luo9_core::luo9_free_string(ptr as *mut std::ffi::c_char) }
+                rquickjs::Function::new(ctx.clone(), |ptr: u64| unsafe {
+                    luo9_core::luo9_free_string(ptr as *mut std::ffi::c_char)
                 })
                 .map_err(|e| format!("注册 luo9_free_string 失败: {}", e))?,
             )
@@ -355,16 +347,19 @@ fn run_quickjs_plugin(
 
             let subs_obj = rquickjs::Object::new(ctx.clone())
                 .map_err(|e| format!("创建 subscribers 对象失败: {}", e))?;
-            for (topic, &id) in subscriber_ids {
+            subscriber_ids.iter().try_for_each(|(topic, &id)| {
                 subs_obj
                     .set(topic.as_str(), id as i32)
-                    .map_err(|e| format!("设置 subscriber 失败: {}", e))?;
-            }
+                    .map_err(|e| format!("设置 subscriber 失败: {}", e))
+            })?;
             globals
                 .set("__luo9_subscribers", subs_obj)
                 .map_err(|e| format!("设置 __luo9_subscribers 失败: {}", e))?;
 
-            info!("[quickjs] 已注册 __luo9_core FFI 绑定，subscriber: {:?}", subscriber_ids);
+            info!(
+                "[quickjs] 已注册 __luo9_core FFI 绑定，subscriber: {:?}",
+                subscriber_ids
+            );
 
             // ── 加载并执行插件脚本 ───────────────────────────────────
 
