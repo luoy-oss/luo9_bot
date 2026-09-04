@@ -20,13 +20,19 @@ pub struct PluginHandle {
 impl PluginHandle {
     /// 取消所有 topic 的订阅，触发插件退出
     pub fn unsubscribe_all(&self) {
-        for (topic, &sub_id) in self.runtime.subscriber_ids() {
-            if let Err(e) = Bus::topic(topic).unsubscribe(sub_id) {
-                warn!("插件 {} 取消订阅 {} 失败: {:?}", self.name, topic, e);
-            } else {
-                info!("插件 {} 已取消订阅 {} (sub_id={})", self.name, topic, sub_id);
-            }
-        }
+        self.runtime
+            .subscriber_ids()
+            .iter()
+            .for_each(|(topic, &sub_id)| {
+                if let Err(e) = Bus::topic(topic).unsubscribe(sub_id) {
+                    warn!("插件 {} 取消订阅 {} 失败: {:?}", self.name, topic, e);
+                } else {
+                    info!(
+                        "插件 {} 已取消订阅 {} (sub_id={})",
+                        self.name, topic, sub_id
+                    );
+                }
+            });
     }
 
     /// 检查插件是否仍在运行

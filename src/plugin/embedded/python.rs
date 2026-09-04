@@ -7,12 +7,12 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[cfg(unix)]
-use std::sync::atomic::{AtomicUsize, Ordering};
-#[cfg(unix)]
 use std::sync::OnceLock;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::plugin::runtime::PluginRuntime;
 
@@ -62,11 +62,7 @@ impl Drop for SigintGuard {
             // 最后一个 guard：恢复原始 handler
             if let Some(handler) = SAVED_SIGINT_HANDLER.get() {
                 unsafe {
-                    libc::sigaction(
-                        libc::SIGINT,
-                        handler as *const _,
-                        std::ptr::null_mut(),
-                    );
+                    libc::sigaction(libc::SIGINT, handler as *const _, std::ptr::null_mut());
                 }
             }
         }
@@ -90,7 +86,9 @@ fn block_sigint_on_current_thread() {
 struct SigintGuard;
 #[cfg(not(unix))]
 impl SigintGuard {
-    fn protect() -> Self { Self }
+    fn protect() -> Self {
+        Self
+    }
 }
 
 #[cfg(not(unix))]
@@ -108,7 +106,8 @@ pub struct PythonRuntime {
 
 impl PythonRuntime {
     pub fn new(path: &Path) -> Result<Self, String> {
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
         let name = file_name.trim_end_matches(".py").to_string();
@@ -208,28 +207,25 @@ fn run_python_plugin(
                 cwd.join("sdk").join("python"),
                 cwd.join("..").join("sdk").join("python"),
             ];
-            for sdk_dir in &sdk_candidates {
-                if sdk_dir.exists() {
-                    let sdk_str = sdk_dir.to_string_lossy().to_string();
-                    info!("[python] 已添加 SDK 路径: {}", sdk_str);
-                    path.call_method1("insert", (0, sdk_str))?;
-                    break;
-                }
+            if let Some(sdk_dir) = sdk_candidates.iter().find(|sdk_dir| sdk_dir.exists()) {
+                let sdk_str = sdk_dir.to_string_lossy().to_string();
+                info!("[python] 已添加 SDK 路径: {}", sdk_str);
+                path.call_method1("insert", (0, sdk_str))?;
             }
 
             // 注入预分配的 subscriber ID 到 luo9_sdk.bus 模块
             if !subs.is_empty() {
                 let luo9_bus = py.import("luo9_sdk.bus")?;
                 let py_subs = PyDict::new(py);
-                for (topic, &id) in &subs {
-                    py_subs.set_item(topic, id)?;
-                }
+                subs.iter()
+                    .try_for_each(|(topic, &id)| py_subs.set_item(topic, id))?;
                 luo9_bus.call_method1("init_subscribers", (py_subs,))?;
                 info!("[python] 已注入 subscriber 映射: {:?}", subs);
             }
 
             // 加载插件模块
-            let stem = plugin_path_owned.file_stem()
+            let stem = plugin_path_owned
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("plugin");
             let plugin_mod = py.import(stem)?;

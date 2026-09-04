@@ -26,6 +26,7 @@ pub async fn query_versions(timeout: Duration) {
     let query = r#"{"action":"query"}"#;
     if let Err(e) = bus::Bus::topic(bus::TOPIC_VERSION).publish(query) {
         error!("[version] 发布版本查询失败: {:?}", e);
+        let _ = bus::Bus::topic(bus::TOPIC_VERSION_REPLY).unsubscribe(reply_sub);
         return;
     }
     info!("[version] 已发布版本查询，等待插件响应...");
@@ -63,5 +64,9 @@ pub async fn query_versions(timeout: Duration) {
         manager.get_all_plugins().len()
     };
 
-    info!("[version] 版本查询完成: {}/{} 个插件已响应", responded, total);
+    info!(
+        "[version] 版本查询完成: {}/{} 个插件已响应",
+        responded, total
+    );
+    let _ = bus::Bus::topic(bus::TOPIC_VERSION_REPLY).unsubscribe(reply_sub);
 }

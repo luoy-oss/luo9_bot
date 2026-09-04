@@ -21,7 +21,7 @@ impl Serialize for MetaEventType {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Status{
+pub struct Status {
     pub good: bool,
     pub online: bool,
 }
@@ -36,7 +36,6 @@ pub struct MetaEvent {
     pub time: u64,
 }
 
-
 impl MetaEvent {
     pub fn new(data: Value) -> Self {
         let meta_event_type = match data.get("meta_event_type").and_then(|v| v.as_str()) {
@@ -44,24 +43,22 @@ impl MetaEvent {
             Some("heartbeat") => MetaEventType::Heartbeat,
             _ => MetaEventType::Unknown,
         };
-        
-        
-        let sub_type = SubType::deserialize(
-                data.get("sub_type")
-                                    .unwrap_or(&Value::Null))
-                                    .unwrap_or(SubType::None);
 
-        Self{
-            interval: data.get("interval").and_then(|v| v.as_u64()).map(|v| v),
+        let sub_type = SubType::deserialize(data.get("sub_type").unwrap_or(&Value::Null))
+            .unwrap_or(SubType::None);
+
+        Self {
+            interval: data.get("interval").and_then(|v| v.as_u64()),
             meta_event_type,
             sub_type,
             self_id: data.get("self_id").and_then(|v| v.as_u64()).unwrap_or(0),
-            status: data.get("status").map(|v| serde_json::from_value(v.clone()).unwrap()),
+            status: data
+                .get("status")
+                .map(|v| serde_json::from_value(v.clone()).unwrap()),
             time: data.get("time").and_then(|v| v.as_u64()).unwrap_or(0),
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PostType {

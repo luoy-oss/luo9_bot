@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::plugin::runtime::PluginRuntime;
 
@@ -21,7 +21,8 @@ pub struct JvmRuntime {
 
 impl JvmRuntime {
     pub fn new(path: &Path) -> Result<Self, String> {
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
         let name = file_name.trim_end_matches(".jar").to_string();
@@ -74,11 +75,7 @@ impl PluginRuntime for JvmRuntime {
 }
 
 /// 在独立线程中执行 JVM 插件
-fn run_jvm_plugin(
-    plugin_path: &Path,
-    plugin_name: &str,
-    _subscriber_ids: &HashMap<String, usize>,
-) {
+fn run_jvm_plugin(plugin_path: &Path, plugin_name: &str, _subscriber_ids: &HashMap<String, usize>) {
     use jni::{InitArgsBuilder, JavaVM};
 
     // 构建 classpath：插件 JAR + SDK JAR + 工作目录
@@ -90,27 +87,30 @@ fn run_jvm_plugin(
     let mut classpath_parts: Vec<String> = vec![plugin_jar.to_string()];
 
     // SDK JAR（如果有编译产物）
-    if sdk_jar_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&sdk_jar_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.extension().map(|e| e == "jar").unwrap_or(false) {
-                    classpath_parts.push(p.to_string_lossy().to_string());
-                }
-            }
-        }
+    if sdk_jar_dir.exists()
+        && let Ok(entries) = std::fs::read_dir(&sdk_jar_dir)
+    {
+        classpath_parts.extend(
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
+                .map(|path| path.to_string_lossy().to_string()),
+        );
     }
 
     // 插件同目录下的其他 JAR（依赖库）
-    if let Some(parent) = plugin_path.parent() {
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p != plugin_path && p.extension().map(|e| e == "jar").unwrap_or(false) {
-                    classpath_parts.push(p.to_string_lossy().to_string());
-                }
-            }
-        }
+    if let Some(parent) = plugin_path.parent()
+        && let Ok(entries) = std::fs::read_dir(parent)
+    {
+        classpath_parts.extend(
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path != plugin_path)
+                .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
+                .map(|path| path.to_string_lossy().to_string()),
+        );
     }
 
     let separator = if cfg!(windows) { ";" } else { ":" };
@@ -119,10 +119,7 @@ fn run_jvm_plugin(
     info!("[jvm] classpath: {}", classpath);
 
     // 创建 JVM
-    let jvm_args = match InitArgsBuilder::new()
-        .option(&classpath_opt)
-        .build()
-    {
+    let jvm_args = match InitArgsBuilder::new().option(&classpath_opt).build() {
         Ok(args) => args,
         Err(e) => {
             error!("[jvm] 构建 JVM 参数失败: {}", e);
@@ -158,11 +155,7 @@ fn run_jvm_plugin(
         };
 
         // 查找 plugin_main() 静态方法
-        let main_method = match env.get_static_method_id(
-            &main_class,
-            "plugin_main",
-            "()V",
-        ) {
+        let main_method = match env.get_static_method_id(&main_class, "plugin_main", "()V") {
             Ok(method) => method,
             Err(e) => {
                 error!("[jvm] 找不到 plugin_main() 方法: {}", e);

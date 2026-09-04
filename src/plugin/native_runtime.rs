@@ -1,10 +1,10 @@
 // src/plugin/native_runtime.rs
+use libloading::Library;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use libloading::Library;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use super::bus::Bus;
 use super::runtime::PluginRuntime;
@@ -71,15 +71,18 @@ impl PluginRuntime for NativeRuntime {
 
 impl NativeRuntime {
     /// 创建新的原生运行时（加载 DLL/SO）
+    ///
+    /// # Safety
+    ///
+    /// `path` 必须指向受信任且与当前宿主 ABI 兼容的动态库。加载动态库可能执行其
+    /// 初始化代码，调用方必须保证这些副作用对当前进程有效。
     pub unsafe fn new(path: &PathBuf) -> Result<Self, String> {
         let lib = unsafe {
-            Arc::new(
-                Library::new(path)
-                    .map_err(|e| format!("加载动态库失败: {}", e))?
-            )
+            Arc::new(Library::new(path).map_err(|e| format!("加载动态库失败: {}", e))?)
         };
 
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
         let name = extract_display_name(file_name);
@@ -94,19 +97,30 @@ impl NativeRuntime {
     }
 
     /// 检查是否导出了 plugin_main 符号
+    ///
+    /// # Safety
+    ///
+    /// 插件导出的 `plugin_main` 必须符合 `unsafe extern "C" fn()` ABI。
     pub unsafe fn has_plugin_main(&self) -> bool {
-        unsafe { self.lib.get::<unsafe extern "C" fn()>(b"plugin_main\0").is_ok() }
+        unsafe {
+            self.lib
+                .get::<unsafe extern "C" fn()>(b"plugin_main\0")
+                .is_ok()
+        }
     }
 
     /// 取消所有 topic 的订阅
     fn unsubscribe_all(&self) {
-        for (topic, &sub_id) in &self.subscriber_ids {
+        self.subscriber_ids.iter().for_each(|(topic, &sub_id)| {
             if let Err(e) = Bus::topic(topic).unsubscribe(sub_id) {
                 warn!("插件 {} 取消订阅 {} 失败: {:?}", self.name, topic, e);
             } else {
-                info!("插件 {} 已取消订阅 {} (sub_id={})", self.name, topic, sub_id);
+                info!(
+                    "插件 {} 已取消订阅 {} (sub_id={})",
+                    self.name, topic, sub_id
+                );
             }
-        }
+        });
     }
 
     /// 等待插件线程退出
@@ -141,34 +155,54 @@ impl NativeRuntime {
             let init_result = lib.get::<InitSubscribersFn>(b"luo9_init_subscribers\0");
             match init_result {
                 Ok(init_fn) => {
-                    use super::bus::{TOPIC_MESSAGE, TOPIC_NOTICE, TOPIC_META_EVENT, TOPIC_REQUEST, TOPIC_TASK, TOPIC_SEND};
+                    use super::bus::{
+                        TOPIC_MESSAGE, TOPIC_META_EVENT, TOPIC_NOTICE, TOPIC_REQUEST, TOPIC_SEND,
+                        TOPIC_TASK,
+                    };
                     let subs = PluginSubscribersRaw {
-                        message_sub_id: subscriber_ids.get(TOPIC_MESSAGE).copied().unwrap_or(0) as i32,
-                        meta_event_sub_id: subscriber_ids.get(TOPIC_META_EVENT).copied().unwrap_or(0) as i32,
-                        notice_sub_id: subscriber_ids.get(TOPIC_NOTICE).copied().unwrap_or(0) as i32,
-                        request_sub_id: subscriber_ids.get(TOPIC_REQUEST).copied().unwrap_or(0) as i32,
+                        message_sub_id: subscriber_ids.get(TOPIC_MESSAGE).copied().unwrap_or(0)
+                            as i32,
+                        meta_event_sub_id: subscriber_ids
+                            .get(TOPIC_META_EVENT)
+                            .copied()
+                            .unwrap_or(0) as i32,
+                        notice_sub_id: subscriber_ids.get(TOPIC_NOTICE).copied().unwrap_or(0)
+                            as i32,
+                        request_sub_id: subscriber_ids.get(TOPIC_REQUEST).copied().unwrap_or(0)
+                            as i32,
                         task_sub_id: subscriber_ids.get(TOPIC_TASK).copied().unwrap_or(0) as i32,
                         send_sub_id: subscriber_ids.get(TOPIC_SEND).copied().unwrap_or(0) as i32,
                     };
-                    info!("[native] 插件 {} 传递 subscriber 映射: msg={}, notice={}, meta={}, request={}, task={}, send={}",
-                        plugin_name, subs.message_sub_id, subs.notice_sub_id, subs.meta_event_sub_id,
-                        subs.request_sub_id, subs.task_sub_id, subs.send_sub_id);
+                    info!(
+                        "[native] 插件 {} 传递 subscriber 映射: msg={}, notice={}, meta={}, request={}, task={}, send={}",
+                        plugin_name,
+                        subs.message_sub_id,
+                        subs.notice_sub_id,
+                        subs.meta_event_sub_id,
+                        subs.request_sub_id,
+                        subs.task_sub_id,
+                        subs.send_sub_id
+                    );
                     init_fn(&subs);
                     info!("插件 {} 已初始化 subscriber 映射", plugin_name);
                 }
                 Err(_) => {
-                    warn!("插件 {} 未导出 luo9_init_subscribers，将使用默认订阅", plugin_name);
+                    warn!(
+                        "插件 {} 未导出 luo9_init_subscribers，将使用默认订阅",
+                        plugin_name
+                    );
                 }
             }
 
             // 获取 plugin_main 符号
-            let plugin_main: libloading::Symbol<unsafe extern "C" fn()> = match lib.get(b"plugin_main\0") {
-                Ok(s) => s,
-                Err(e) => {
-                    error!("插件 {} 获取 plugin_main 失败: {}", plugin_name, e);
-                    return;
-                }
-            };
+            let plugin_main: libloading::Symbol<unsafe extern "C" fn()> =
+                match lib.get(b"plugin_main\0") {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("插件 {} 获取 plugin_main 失败: {}", plugin_name, e);
+                        return;
+                    }
+                };
 
             info!("插件 {} 线程启动", plugin_name);
 

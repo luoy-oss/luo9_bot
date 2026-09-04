@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::{Mutex, Once};
-use tracing_subscriber::fmt;
 use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::fmt;
 
 /// 确保日志系统只初始化一次
 static INIT: Once = Once::new();
@@ -24,7 +24,10 @@ pub fn push_log(line: String) {
 
 /// 获取日志缓冲区快照
 pub fn get_logs() -> Vec<String> {
-    LOG_BUFFER.lock().map(|buf| buf.iter().cloned().collect()).unwrap_or_default()
+    LOG_BUFFER
+        .lock()
+        .map(|buf| buf.iter().cloned().collect())
+        .unwrap_or_default()
 }
 
 /// 去除 ANSI 转义序列
@@ -76,11 +79,18 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for GlobalWriterMaker {
 
 pub fn init(level: &str) {
     INIT.call_once(|| {
-        let mut filter = EnvFilter::new(level);
         // 屏蔽第三方网络库的 debug 日志
-        for noisy in ["reqwest", "h2", "hyper_util", "rustls_platform_verifier", "rustls"] {
-            filter = filter.add_directive(format!("{}=warn", noisy).parse().unwrap());
-        }
+        let filter = [
+            "reqwest",
+            "h2",
+            "hyper_util",
+            "rustls_platform_verifier",
+            "rustls",
+        ]
+        .into_iter()
+        .fold(EnvFilter::new(level), |filter, noisy| {
+            filter.add_directive(format!("{noisy}=warn").parse().unwrap())
+        });
 
         let init_result = fmt::Subscriber::builder()
             .with_env_filter(filter)

@@ -8,47 +8,47 @@ pub enum SubType {
     Connect,
 
     // Message 子类型
-    Friend,       // 好友私聊
-    GroupTemp,    // 群临时会话
-    GroupSelf,    // 群中自身发送
-    Other,        // 其他来源
-    Normal,       // 普通消息
-    Anonymous,    // 匿名消息
-    Notice,       // 系统提示
+    Friend,    // 好友私聊
+    GroupTemp, // 群临时会话
+    GroupSelf, // 群中自身发送
+    Other,     // 其他来源
+    Normal,    // 普通消息
+    Anonymous, // 匿名消息
+    Notice,    // 系统提示
 
     // Notice 子类型 - 管理员
-    Set,          // 设置管理员
-    Unset,        // 取消管理员
+    Set,   // 设置管理员
+    Unset, // 取消管理员
 
     // Notice 子类型 - 禁言
-    Ban,          // 禁言
-    LiftBan,      // 解禁言
-    Unban,        // 解禁言（别名）
+    Ban,     // 禁言
+    LiftBan, // 解禁言
+    Unban,   // 解禁言（别名）
 
     // Notice 子类型 - 成员变动
-    Leave,        // 主动退群
-    Kick,         // 被踢出群
-    KickMe,       // 登录号被踢
-    Approve,      // 同意入群/请求
-    Invite,       // 邀请入群
-    Add,          // 主动加群/添加
+    Leave,   // 主动退群
+    Kick,    // 被踢出群
+    KickMe,  // 登录号被踢
+    Approve, // 同意入群/请求
+    Invite,  // 邀请入群
+    Add,     // 主动加群/添加
 
     // Notice 子类型 - 戳一戳和互动
-    Poke,         // 戳一戳
-    LuckyKing,    // 运气王
+    Poke,      // 戳一戳
+    LuckyKing, // 运气王
 
     // Notice 子类型 - 荣誉
-    Talkative,    // 群龙王
-    Performer,    // 表演之王
-    Emotion,      // 快乐之源
+    Talkative, // 群龙王
+    Performer, // 表演之王
+    Emotion,   // 快乐之源
 
     // Notice 子类型 - 其他
-    InputStatus,  // 输入状态
-    Title,        // 群头衔变更
-    ProfileLike,  // 个人资料点赞
-    Honor,        // 群荣誉变更
+    InputStatus, // 输入状态
+    Title,       // 群头衔变更
+    ProfileLike, // 个人资料点赞
+    Honor,       // 群荣誉变更
 
-    None,         // 无子类型/未知
+    None, // 无子类型/未知
 }
 
 impl Serialize for SubType {
@@ -111,7 +111,7 @@ impl<'de> Deserialize<'de> for SubType {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let sub_type = match s.as_str() {
+        match s.as_str() {
             // Lifecycle
             "enable" => Ok(Self::Enable),
             "disable" => Ok(Self::Disable),
@@ -159,7 +159,6 @@ impl<'de> Deserialize<'de> for SubType {
             "profile_like" => Ok(Self::ProfileLike),
 
             _ => Ok(Self::None),
-        };
-        sub_type
+        }
     }
 }

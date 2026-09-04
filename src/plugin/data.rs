@@ -1,11 +1,11 @@
 // src/plugin/data.rs
 // 插件数据类型定义
 
-use serde::Serialize;
-use crate::message::Message;
 use crate::event::MetaEvent;
+use crate::message::Message;
 use crate::notice::Notice;
 use crate::request::Request;
+use serde::Serialize;
 
 /// 插件数据类型枚举
 /// 统一所有可能传递给插件的数据类型

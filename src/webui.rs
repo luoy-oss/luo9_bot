@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
@@ -87,7 +87,8 @@ const HTTP_TIMEOUT_SECS: u64 = 10;
 const WEBUI_VERSION: &str = "1.0.0";
 
 /// 镜像健康检查测试 URL（用于检测连通性）
-const MIRROR_TEST_URL: &str = "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
+const MIRROR_TEST_URL: &str =
+    "https://raw.githubusercontent.com/luo9-bot/registry/main/registry.json";
 
 /// 镜像健康检查间隔（秒）
 const MIRROR_CHECK_INTERVAL_SECS: u64 = 300; // 5 分钟
@@ -165,7 +166,7 @@ pub struct BetaCacheEntry {
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgress {
     pub plugin_name: String,
-    pub status: String,      // "downloading", "success", "error"
+    pub status: String, // "downloading", "success", "error"
     pub message: String,
     pub progress: Option<f32>, // 0.0 - 1.0，None 表示不确定
 }
@@ -343,7 +344,13 @@ fn generate_token() -> String {
     format!("{:016x}", timestamp.wrapping_mul(pid as u128))
 }
 
-pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: String, ws_connected: bool) {
+pub async fn start(
+    host: &str,
+    port: u16,
+    plugin_dir: String,
+    config_token: String,
+    ws_connected: bool,
+) {
     // token 生成逻辑：配置为空时随机生成
     let token = if config_token.is_empty() {
         let generated = generate_token();
@@ -381,14 +388,14 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
 
     // 启动镜像健康检查任务（后台预热）
     let cache_for_check = mirror_cache.clone();
-    tokio::spawn(async move {
+    let mut background_tasks = tokio::task::JoinSet::new();
+    background_tasks.spawn(async move {
         // 首次立即检查
         check_mirrors_health(&cache_for_check).await;
 
         // 定时刷新
-        let mut interval = tokio::time::interval(
-            std::time::Duration::from_secs(MIRROR_CHECK_INTERVAL_SECS)
-        );
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(MIRROR_CHECK_INTERVAL_SECS));
         loop {
             interval.tick().await;
             check_mirrors_health(&cache_for_check).await;
@@ -398,7 +405,7 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     // 启动测试版信息预加载任务（后台预热）
     let mirror_cache_for_preload = mirror_cache.clone();
     let user_selected_mirror_for_preload = user_selected_mirror.clone();
-    tokio::spawn(async move {
+    background_tasks.spawn(async move {
         // 等待镜像健康检查完成
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
@@ -408,8 +415,9 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         let available_mirrors = get_available_mirrors(
             &mirror_cache_for_preload,
             &user_selected_mirror_for_preload,
-            "raw"
-        ).await;
+            "raw",
+        )
+        .await;
 
         match fetch_registry_with_mirrors(&available_mirrors).await {
             Ok(registry) => {
@@ -445,7 +453,10 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
 
-                info!("测试版预加载完成: 成功 {}/{}, 失败 {}", success, total, failed);
+                info!(
+                    "测试版预加载完成: 成功 {}/{}, 失败 {}",
+                    success, total, failed
+                );
             }
             Err(e) => {
                 warn!("获取注册表失败，跳过测试版预加载: {}", e);
@@ -471,19 +482,28 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
         .route("/api/plugins/{name}/update", post(api_plugin_update))
         .route("/api/plugins/{name}/priority", put(api_plugin_priority))
         .route("/api/plugins/{name}/block", put(api_plugin_block))
-        .route("/api/plugins/{name}/beta-releases", get(api_plugin_beta_releases))
+        .route(
+            "/api/plugins/{name}/beta-releases",
+            get(api_plugin_beta_releases),
+        )
         .route("/api/plugins/install/{name}", post(api_plugin_install))
         .route("/api/registry", get(api_registry))
         .route("/api/logs", get(api_logs))
         .route("/api/config/path", get(api_config_path))
         .route("/api/config", get(api_config_get).put(api_config_put))
-        .route("/api/config/raw", get(api_config_raw_get).put(api_config_raw_put))
+        .route(
+            "/api/config/raw",
+            get(api_config_raw_get).put(api_config_raw_put),
+        )
         .route("/api/download-progress", get(api_download_progress))
         .route("/api/mirrors", get(api_mirrors))
         .route("/api/mirrors/select", put(api_mirror_select))
         .route("/api/restart", post(api_restart))
         .route("/api/restart-progress", get(api_restart_progress))
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
 
     let app = Router::new()
         .merge(static_routes)
@@ -514,23 +534,24 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
     };
 
     let actual_port = listener.local_addr().unwrap().port();
-    info!("WebUI 启动于 http://{}:{}?token={}", host, actual_port, token);
+    info!(
+        "WebUI 启动于 http://{}:{}?token={}",
+        host, actual_port, token
+    );
 
-    axum::serve(listener, app).await.unwrap();
+    if let Err(error) = axum::serve(listener, app).await {
+        tracing::error!("WebUI 服务异常退出: {}", error);
+    }
 }
 
 // ========== 鉴权中间件 ==========
 
 /// 从 query 字符串中提取指定参数值
 fn extract_query_param(query: &str, key: &str) -> Option<String> {
-    for pair in query.split('&') {
-        if let Some((k, v)) = pair.split_once('=') {
-            if k == key {
-                return Some(v.to_string());
-            }
-        }
-    }
-    None
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find_map(|(candidate, value)| (candidate == key).then(|| value.to_string()))
 }
 
 /// API 鉴权中间件：检查 query 参数或 cookie 中的 token
@@ -543,9 +564,7 @@ async fn auth_middleware(
     let headers = request.headers().clone();
 
     // 1. 从 query 参数获取 token
-    let query_token = uri
-        .query()
-        .and_then(|q| extract_query_param(q, "token"));
+    let query_token = uri.query().and_then(|q| extract_query_param(q, "token"));
 
     // 2. 从 cookie 获取 token
     let cookie_token = headers
@@ -581,11 +600,13 @@ async fn auth_middleware(
 
     // 如果是 query 参数验证通过，设置 cookie
     if query_token.is_some() {
-        let cookie_value = format!("luo9_token={}; Path=/; HttpOnly; SameSite=Strict", state.token);
-        response.headers_mut().insert(
-            header::SET_COOKIE,
-            cookie_value.parse().unwrap(),
+        let cookie_value = format!(
+            "luo9_token={}; Path=/; HttpOnly; SameSite=Strict",
+            state.token
         );
+        response
+            .headers_mut()
+            .insert(header::SET_COOKIE, cookie_value.parse().unwrap());
     }
 
     response
@@ -606,7 +627,10 @@ async fn style_css() -> impl IntoResponse {
 
 async fn app_js() -> impl IntoResponse {
     (
-        [(axum::http::header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
         include_str!("webui/app.js"),
     )
 }
@@ -629,40 +653,54 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
     };
 
     // 并行检查 raw 镜像
-    let raw_futures: Vec<_> = GITHUB_RAW_MIRRORS.iter().map(|mirror| {
-        let url = format!("{}{}", mirror, MIRROR_TEST_URL);
-        let client = client.clone();
-        async move {
-            let start = std::time::Instant::now();
-            let result = client.get(&url).header("User-Agent", "luo9-bot").send().await;
-            let latency = start.elapsed().as_millis() as u64;
+    let raw_futures: Vec<_> = GITHUB_RAW_MIRRORS
+        .iter()
+        .map(|mirror| {
+            let url = format!("{}{}", mirror, MIRROR_TEST_URL);
+            let client = client.clone();
+            async move {
+                let start = std::time::Instant::now();
+                let result = client
+                    .get(&url)
+                    .header("User-Agent", "luo9-bot")
+                    .send()
+                    .await;
+                let latency = start.elapsed().as_millis() as u64;
 
-            MirrorStatus {
-                url: mirror.to_string(),
-                latency_ms: latency,
-                available: result.map(|r| r.status().is_success()).unwrap_or(false),
-                download_speed: None,
+                MirrorStatus {
+                    url: mirror.to_string(),
+                    latency_ms: latency,
+                    available: result.map(|r| r.status().is_success()).unwrap_or(false),
+                    download_speed: None,
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     // 并行检查 release 镜像（使用相同测试 URL）
-    let release_futures: Vec<_> = GITHUB_RELEASE_MIRRORS.iter().map(|mirror| {
-        let url = format!("{}{}", mirror, MIRROR_TEST_URL);
-        let client = client.clone();
-        async move {
-            let start = std::time::Instant::now();
-            let result = client.get(&url).header("User-Agent", "luo9-bot").send().await;
-            let latency = start.elapsed().as_millis() as u64;
+    let release_futures: Vec<_> = GITHUB_RELEASE_MIRRORS
+        .iter()
+        .map(|mirror| {
+            let url = format!("{}{}", mirror, MIRROR_TEST_URL);
+            let client = client.clone();
+            async move {
+                let start = std::time::Instant::now();
+                let result = client
+                    .get(&url)
+                    .header("User-Agent", "luo9-bot")
+                    .send()
+                    .await;
+                let latency = start.elapsed().as_millis() as u64;
 
-            MirrorStatus {
-                url: mirror.to_string(),
-                latency_ms: latency,
-                available: result.map(|r| r.status().is_success()).unwrap_or(false),
-                download_speed: None,
+                MirrorStatus {
+                    url: mirror.to_string(),
+                    latency_ms: latency,
+                    available: result.map(|r| r.status().is_success()).unwrap_or(false),
+                    download_speed: None,
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     // 等待所有检查完成
     let (raw_results, release_results) = tokio::join!(
@@ -674,7 +712,10 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
     let mut raw_mirrors: Vec<_> = raw_results.into_iter().filter(|m| m.available).collect();
     raw_mirrors.sort_by_key(|m| m.latency_ms);
 
-    let mut release_mirrors: Vec<_> = release_results.into_iter().filter(|m| m.available).collect();
+    let mut release_mirrors: Vec<_> = release_results
+        .into_iter()
+        .filter(|m| m.available)
+        .collect();
     release_mirrors.sort_by_key(|m| m.latency_ms);
 
     let raw_count = raw_mirrors.len();
@@ -688,9 +729,12 @@ async fn check_mirrors_health(cache: &Arc<RwLock<Option<MirrorCache>>>) {
         last_check: std::time::Instant::now(),
     });
 
-    info!("镜像健康检查完成: raw {}/{} 可用, release {}/{} 可用",
-        raw_count, GITHUB_RAW_MIRRORS.len(),
-        release_count, GITHUB_RELEASE_MIRRORS.len()
+    info!(
+        "镜像健康检查完成: raw {}/{} 可用, release {}/{} 可用",
+        raw_count,
+        GITHUB_RAW_MIRRORS.len(),
+        release_count,
+        GITHUB_RELEASE_MIRRORS.len()
     );
 }
 
@@ -727,7 +771,10 @@ async fn get_available_mirrors(
     // 缓存未命中或已过期，返回默认镜像列表
     match mirror_type {
         "raw" => GITHUB_RAW_MIRRORS.iter().map(|s| s.to_string()).collect(),
-        "release" => GITHUB_RELEASE_MIRRORS.iter().map(|s| s.to_string()).collect(),
+        "release" => GITHUB_RELEASE_MIRRORS
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -816,14 +863,14 @@ async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
 
     // 从插件管理器获取运行时信息
     let manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-    for plugin in &mut plugins {
+    plugins.iter_mut().for_each(|plugin| {
         if let Some(info) = manager.get_plugin_info(&plugin.name) {
             plugin.version = info.version.clone();
             plugin.priority = info.priority;
             plugin.block_enabled = info.block_enabled;
             plugin.active = info.active;
         }
-    }
+    });
 
     Json(plugins)
 }
@@ -855,7 +902,8 @@ async fn api_registry(
     Query(q): Query<RegistryQuery>,
 ) -> impl IntoResponse {
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
@@ -895,7 +943,7 @@ async fn api_registry(
         let has_update = if installed && !latest_version.is_empty() {
             match &installed_version {
                 Some(v) => v != &latest_version,
-                None => true,  // 没有版本信息，假设有更新
+                None => true, // 没有版本信息，假设有更新
             }
         } else {
             false
@@ -920,10 +968,8 @@ async fn api_registry(
         if include_beta {
             match fetch_beta_releases(&state.beta_cache, &plugin.repo).await {
                 Ok(releases) => {
-                    let beta_versions: Vec<BetaVersion> = releases
-                        .iter()
-                        .map(convert_to_beta_version)
-                        .collect();
+                    let beta_versions: Vec<BetaVersion> =
+                        releases.iter().map(convert_to_beta_version).collect();
                     available_plugin.has_beta = !beta_versions.is_empty();
                     available_plugin.beta_versions = beta_versions;
                 }
@@ -948,32 +994,39 @@ async fn api_plugin_beta_releases(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
-        Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("获取注册表失败: {e}")).into_response(),
+        Err(e) => {
+            return json_err(StatusCode::BAD_GATEWAY, &format!("获取注册表失败: {e}"))
+                .into_response();
+        }
     };
 
     let plugin = match registry.plugins.get(&name) {
         Some(p) => p,
-        None => return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 不在注册表中")).into_response(),
+        None => {
+            return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 不在注册表中"))
+                .into_response();
+        }
     };
 
     // 获取测试版信息
     match fetch_beta_releases(&state.beta_cache, &plugin.repo).await {
         Ok(releases) => {
-            let beta_versions: Vec<BetaVersion> = releases
-                .iter()
-                .map(convert_to_beta_version)
-                .collect();
+            let beta_versions: Vec<BetaVersion> =
+                releases.iter().map(convert_to_beta_version).collect();
             Json(serde_json::json!({
                 "ok": true,
                 "beta_versions": beta_versions,
             }))
             .into_response()
         }
-        Err(e) => json_err(StatusCode::BAD_GATEWAY, &format!("获取测试版信息失败: {e}")).into_response(),
+        Err(e) => {
+            json_err(StatusCode::BAD_GATEWAY, &format!("获取测试版信息失败: {e}")).into_response()
+        }
     }
 }
 
@@ -989,7 +1042,8 @@ async fn api_plugin_install(
     Query(q): Query<InstallQuery>,
 ) -> impl IntoResponse {
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
 
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
@@ -1012,7 +1066,8 @@ async fn api_plugin_install(
                 // 稳定版中没有，尝试从测试版缓存中查找
                 let cache_read = state.beta_cache.read().await;
                 if let Some(entry) = cache_read.get(&plugin.repo) {
-                    let beta_version = entry.releases
+                    let beta_version = entry
+                        .releases
                         .iter()
                         .map(convert_to_beta_version)
                         .find(|bv| bv.version == *ver);
@@ -1026,10 +1081,16 @@ async fn api_plugin_install(
                         };
                         &version_entry
                     } else {
-                        return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}"));
+                        return json_err(
+                            StatusCode::NOT_FOUND,
+                            &format!("插件 {name} 没有版本 {ver}"),
+                        );
                     }
                 } else {
-                    return json_err(StatusCode::NOT_FOUND, &format!("插件 {name} 没有版本 {ver}"));
+                    return json_err(
+                        StatusCode::NOT_FOUND,
+                        &format!("插件 {name} 没有版本 {ver}"),
+                    );
                 }
             }
         }
@@ -1047,8 +1108,11 @@ async fn api_plugin_install(
         None => {
             return json_err(
                 StatusCode::BAD_REQUEST,
-                &format!("插件 {name} v{} 不支持当前平台 {platform_key}", version_entry_ref.version),
-            )
+                &format!(
+                    "插件 {name} v{} 不支持当前平台 {platform_key}",
+                    version_entry_ref.version
+                ),
+            );
         }
     };
 
@@ -1059,8 +1123,15 @@ async fn api_plugin_install(
     );
 
     // 获取可用镜像列表（优先用户选择，否则按延迟排序）
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
-    let download_urls = build_mirrored_urls(&primary_url, &available_mirrors.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
+    let download_urls = build_mirrored_urls(
+        &primary_url,
+        &available_mirrors
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>(),
+    );
 
     info!("正在下载插件: {} v{}", name, version_entry_ref.version);
 
@@ -1073,55 +1144,73 @@ async fn api_plugin_install(
     });
 
     // 带镜像 fallback 下载文件
-    let (bytes, _used_url) = match download_with_fallback(&download_urls, &state.progress_tx, &name).await {
-        Ok((b, url)) => (b, url),
-        Err(e) => {
-            let _ = state.progress_tx.send(DownloadProgress {
-                plugin_name: name.clone(),
-                status: "error".to_string(),
-                message: format!("下载失败: {e}"),
-                progress: None,
-            });
-            return json_err(StatusCode::BAD_GATEWAY, &format!("下载失败: {e}"));
-        }
-    };
+    let (bytes, _used_url) =
+        match download_with_fallback(&download_urls, &state.progress_tx, &name).await {
+            Ok((b, url)) => (b, url),
+            Err(e) => {
+                let _ = state.progress_tx.send(DownloadProgress {
+                    plugin_name: name.clone(),
+                    status: "error".to_string(),
+                    message: format!("下载失败: {e}"),
+                    progress: None,
+                });
+                return json_err(StatusCode::BAD_GATEWAY, &format!("下载失败: {e}"));
+            }
+        };
 
     // 发送下载完成进度
     let _ = state.progress_tx.send(DownloadProgress {
         plugin_name: name.clone(),
         status: "downloading".to_string(),
-        message: format!("正在保存文件..."),
+        message: "正在保存文件...".to_string(),
         progress: Some(0.9),
     });
 
     // 保存到插件目录
     let dir = PathBuf::from(&state.plugin_dir);
-    if !dir.exists() {
-        if let Err(e) = fs::create_dir_all(&dir) {
-            return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("创建目录失败: {e}"));
-        }
+    if !dir.exists()
+        && let Err(e) = fs::create_dir_all(&dir)
+    {
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("创建目录失败: {e}"),
+        );
     }
 
     let target = dir.join(&asset_name);
     if let Err(e) = fs::write(&target, &bytes) {
-        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存文件失败: {e}"));
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("保存文件失败: {e}"),
+        );
     }
 
-    info!("插件安装成功: {} v{} -> {}", name, version_entry_ref.version, target.display());
+    info!(
+        "插件安装成功: {} v{} -> {}",
+        name,
+        version_entry_ref.version,
+        target.display()
+    );
 
     // 保存版本信息
     save_installed_version(&state.plugin_dir, &name, &version_entry_ref.version);
 
     // 自动加载插件（无需重启）
     let config = crate::config::LNConfig::load();
-    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+    let config_entries = config
+        .as_ref()
+        .map(|c| c.plugins.plugins.clone())
+        .unwrap_or_default();
     match crate::plugin::enable_plugin(&name, &target, &config_entries).await {
         Ok(msg) => {
             info!("插件 {} 已自动加载: {}", name, msg);
             let _ = state.progress_tx.send(DownloadProgress {
                 plugin_name: name.clone(),
                 status: "success".to_string(),
-                message: format!("插件 {} v{} 安装成功并已加载", name, version_entry_ref.version),
+                message: format!(
+                    "插件 {} v{} 安装成功并已加载",
+                    name, version_entry_ref.version
+                ),
                 progress: Some(1.0),
             });
             json_ok(&format!(
@@ -1134,7 +1223,10 @@ async fn api_plugin_install(
             let _ = state.progress_tx.send(DownloadProgress {
                 plugin_name: name.clone(),
                 status: "success".to_string(),
-                message: format!("插件 {} v{} 安装成功，但自动加载失败: {}", name, version_entry_ref.version, e),
+                message: format!(
+                    "插件 {} v{} 安装成功，但自动加载失败: {}",
+                    name, version_entry_ref.version, e
+                ),
                 progress: Some(1.0),
             });
             json_ok(&format!(
@@ -1173,7 +1265,10 @@ async fn api_plugin_enable(
 
     // 运行时加载插件
     let config = crate::config::LNConfig::load();
-    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+    let config_entries = config
+        .as_ref()
+        .map(|c| c.plugins.plugins.clone())
+        .unwrap_or_default();
     match crate::plugin::enable_plugin(&name, &enabled_path, &config_entries).await {
         Ok(msg) => {
             info!("{}", msg);
@@ -1212,7 +1307,10 @@ async fn api_plugin_disable(
             Err(e) => {
                 // 如果不是"已经禁用"的错误，则中止文件重命名
                 if !e.contains("已经是禁用状态") {
-                    return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("运行时禁用失败: {e}"));
+                    return json_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        &format!("运行时禁用失败: {e}"),
+                    );
                 }
                 warn!("插件 {} 运行时状态: {}", name, e);
             }
@@ -1229,20 +1327,22 @@ async fn api_plugin_disable(
 }
 
 /// 热重载插件
-async fn api_plugin_reload(
-    Path(name): Path<String>,
-) -> impl IntoResponse {
+async fn api_plugin_reload(Path(name): Path<String>) -> impl IntoResponse {
     let config = crate::config::LNConfig::load();
-    let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+    let config_entries = config
+        .as_ref()
+        .map(|c| c.plugins.plugins.clone())
+        .unwrap_or_default();
 
     match crate::plugin::reload_plugin(&name, &config_entries).await {
         Ok(msg) => {
             info!("{}", msg);
             json_ok(&msg)
         }
-        Err(e) => {
-            json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("热重载失败: {e}"))
-        }
+        Err(e) => json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("热重载失败: {e}"),
+        ),
     }
 }
 
@@ -1265,7 +1365,8 @@ async fn api_plugin_update(
     let current_file = enabled_path.or(disabled_path).unwrap();
 
     // 2. 获取注册表
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "raw").await;
     let registry = match fetch_registry_with_mirrors(&available_mirrors).await {
         Ok(r) => r,
         Err(e) => return json_err(StatusCode::BAD_GATEWAY, &format!("获取注册表失败: {e}")),
@@ -1289,15 +1390,25 @@ async fn api_plugin_update(
         None => {
             return json_err(
                 StatusCode::BAD_REQUEST,
-                &format!("插件 {name} v{} 不支持当前平台 {platform_key}", latest_version.version),
-            )
+                &format!(
+                    "插件 {name} v{} 不支持当前平台 {platform_key}",
+                    latest_version.version
+                ),
+            );
         }
     };
 
     // 检查是否已是最新版本（通过文件名判断）
-    let current_file_name = current_file.file_name().unwrap().to_string_lossy().to_string();
+    let current_file_name = current_file
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     if current_file_name == asset_name || current_file_name == format!("{asset_name}.disabled") {
-        return json_ok(&format!("插件 {name} 已是最新版本 v{}", latest_version.version));
+        return json_ok(&format!(
+            "插件 {name} 已是最新版本 v{}",
+            latest_version.version
+        ));
     }
 
     info!("正在更新插件: {} -> v{}", name, latest_version.version);
@@ -1309,7 +1420,10 @@ async fn api_plugin_update(
             Ok(msg) => info!("{}", msg),
             Err(e) => {
                 if !e.contains("已经是禁用状态") {
-                    return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("禁用插件失败: {e}"));
+                    return json_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        &format!("禁用插件失败: {e}"),
+                    );
                 }
             }
         }
@@ -1326,8 +1440,15 @@ async fn api_plugin_update(
         plugin.repo, latest_version.tag, asset_name
     );
 
-    let available_mirrors = get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
-    let download_urls = build_mirrored_urls(&primary_url, &available_mirrors.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+    let available_mirrors =
+        get_available_mirrors(&state.mirror_cache, &state.user_selected_mirror, "release").await;
+    let download_urls = build_mirrored_urls(
+        &primary_url,
+        &available_mirrors
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>(),
+    );
 
     let _ = state.progress_tx.send(DownloadProgress {
         plugin_name: name.clone(),
@@ -1352,7 +1473,10 @@ async fn api_plugin_update(
     // 8. 保存新文件
     let target = dir.join(&asset_name);
     if let Err(e) = fs::write(&target, &bytes) {
-        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存文件失败: {e}"));
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("保存文件失败: {e}"),
+        );
     }
 
     info!("插件更新成功: {} v{}", name, latest_version.version);
@@ -1363,7 +1487,10 @@ async fn api_plugin_update(
     // 9. 如果之前是启用状态，重新启用
     if was_enabled {
         let config = crate::config::LNConfig::load();
-        let config_entries = config.as_ref().map(|c| c.plugins.plugins.clone()).unwrap_or_default();
+        let config_entries = config
+            .as_ref()
+            .map(|c| c.plugins.plugins.clone())
+            .unwrap_or_default();
         match crate::plugin::enable_plugin(&name, &target, &config_entries).await {
             Ok(msg) => {
                 info!("插件 {} 已重新加载: {}", name, msg);
@@ -1373,17 +1500,26 @@ async fn api_plugin_update(
                     message: format!("插件 {} v{} 更新成功并已加载", name, latest_version.version),
                     progress: Some(1.0),
                 });
-                json_ok(&format!("插件 {} v{} 更新成功并已加载", name, latest_version.version))
+                json_ok(&format!(
+                    "插件 {} v{} 更新成功并已加载",
+                    name, latest_version.version
+                ))
             }
             Err(e) => {
                 warn!("插件 {} 更新成功但重新加载失败: {}", name, e);
                 let _ = state.progress_tx.send(DownloadProgress {
                     plugin_name: name.clone(),
                     status: "success".to_string(),
-                    message: format!("插件 {} v{} 更新成功，但重新加载失败: {}", name, latest_version.version, e),
+                    message: format!(
+                        "插件 {} v{} 更新成功，但重新加载失败: {}",
+                        name, latest_version.version, e
+                    ),
                     progress: Some(1.0),
                 });
-                json_ok(&format!("插件 {} v{} 更新成功，但重新加载失败: {}", name, latest_version.version, e))
+                json_ok(&format!(
+                    "插件 {} v{} 更新成功，但重新加载失败: {}",
+                    name, latest_version.version, e
+                ))
             }
         }
     } else {
@@ -1393,7 +1529,10 @@ async fn api_plugin_update(
             message: format!("插件 {} v{} 更新成功", name, latest_version.version),
             progress: Some(1.0),
         });
-        json_ok(&format!("插件 {} v{} 更新成功", name, latest_version.version))
+        json_ok(&format!(
+            "插件 {} v{} 更新成功",
+            name, latest_version.version
+        ))
     }
 }
 
@@ -1413,15 +1552,26 @@ async fn api_plugin_priority(
             // 持久化到配置文件
             let mut config = match crate::config::LNConfig::load() {
                 Ok(c) => c,
-                Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+                Err(e) => {
+                    return json_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        &format!("加载配置失败: {e}"),
+                    );
+                }
             };
             config.upsert_plugin_entry(crate::config::PluginEntry {
                 name: name.clone(),
                 priority: req.priority,
-                block_enabled: config.get_plugin_entry(&name).map(|e| e.block_enabled).unwrap_or(false),
+                block_enabled: config
+                    .get_plugin_entry(&name)
+                    .map(|e| e.block_enabled)
+                    .unwrap_or(false),
             });
             if let Err(e) = config.save() {
-                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+                return json_err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("保存配置失败: {e}"),
+                );
             }
 
             json_ok(&format!("插件 {name} 优先级已设置为 {}", req.priority))
@@ -1446,18 +1596,33 @@ async fn api_plugin_block(
             // 持久化到配置文件
             let mut config = match crate::config::LNConfig::load() {
                 Ok(c) => c,
-                Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+                Err(e) => {
+                    return json_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        &format!("加载配置失败: {e}"),
+                    );
+                }
             };
             config.upsert_plugin_entry(crate::config::PluginEntry {
                 name: name.clone(),
-                priority: config.get_plugin_entry(&name).map(|e| e.priority).unwrap_or(0),
+                priority: config
+                    .get_plugin_entry(&name)
+                    .map(|e| e.priority)
+                    .unwrap_or(0),
                 block_enabled: req.block_enabled,
             });
             if let Err(e) = config.save() {
-                return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+                return json_err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("保存配置失败: {e}"),
+                );
             }
 
-            let status = if req.block_enabled { "启用" } else { "禁用" };
+            let status = if req.block_enabled {
+                "启用"
+            } else {
+                "禁用"
+            };
             json_ok(&format!("插件 {name} 消息阻断已{status}"))
         }
         Err(e) => json_err(StatusCode::NOT_FOUND, &e),
@@ -1469,10 +1634,13 @@ async fn api_plugin_upload(
     mut multipart: Multipart,
 ) -> impl IntoResponse {
     let dir = PathBuf::from(&state.plugin_dir);
-    if !dir.exists() {
-        if let Err(e) = fs::create_dir_all(&dir) {
-            return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("创建目录失败: {e}"));
-        }
+    if !dir.exists()
+        && let Err(e) = fs::create_dir_all(&dir)
+    {
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("创建目录失败: {e}"),
+        );
     }
 
     let mut saved_count = 0;
@@ -1494,7 +1662,10 @@ async fn api_plugin_upload(
 
         let target = dir.join(&file_name);
         if let Err(e) = fs::write(&target, &data) {
-            return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存文件失败: {e}"));
+            return json_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &format!("保存文件失败: {e}"),
+            );
         }
 
         info!("插件已上传: {} ({} 字节)", file_name, data.len());
@@ -1508,9 +1679,7 @@ async fn api_plugin_upload(
         );
     }
 
-    json_ok(&format!(
-        "已上传 {saved_count} 个插件文件，重启后生效"
-    ))
+    json_ok(&format!("已上传 {saved_count} 个插件文件，重启后生效"))
 }
 
 async fn api_plugin_delete(
@@ -1566,11 +1735,24 @@ async fn api_plugin_delete(
     }
 
     if deleted == 0 {
-        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("删除插件 {name} 失败"));
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("删除插件 {name} 失败"),
+        );
     }
 
     // 删除版本信息
     remove_installed_version(&state.plugin_dir, &name);
+
+    match crate::config::LNConfig::load() {
+        Ok(mut config) => {
+            config.plugins.plugins.retain(|entry| entry.name != name);
+            if let Err(error) = config.save() {
+                warn!("删除插件配置失败: {}", error);
+            }
+        }
+        Err(error) => warn!("加载插件配置失败: {}", error),
+    }
 
     json_ok(&format!("插件 {name} 已卸载并删除 {deleted} 个文件"))
 }
@@ -1621,11 +1803,13 @@ async fn api_config_get() -> impl IntoResponse {
                     "token": config.webui.token,
                 },
             }
-        })).into_response(),
+        }))
+        .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"ok": false, "message": format!("加载配置失败: {e}")})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -1633,36 +1817,70 @@ async fn api_config_get() -> impl IntoResponse {
 async fn api_config_put(Json(req): Json<ConfigUpdateRequest>) -> impl IntoResponse {
     let mut config = match crate::config::LNConfig::load() {
         Ok(c) => c,
-        Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("加载配置失败: {e}")),
+        Err(e) => {
+            return json_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &format!("加载配置失败: {e}"),
+            );
+        }
     };
 
     if let Some(napcat) = req.napcat {
-        if let Some(v) = napcat.ws_client_host { config.napcat.ws_client_host = v; }
-        if let Some(v) = napcat.ws_client_port { config.napcat.ws_client_port = v; }
-        if let Some(v) = napcat.ws_server_host { config.napcat.ws_server_host = v; }
-        if let Some(v) = napcat.ws_server_port { config.napcat.ws_server_port = v; }
-        if let Some(v) = napcat.timeout_seconds { config.napcat.timeout_seconds = v; }
-        if let Some(v) = napcat.token { config.napcat.token = v; }
+        if let Some(v) = napcat.ws_client_host {
+            config.napcat.ws_client_host = v;
+        }
+        if let Some(v) = napcat.ws_client_port {
+            config.napcat.ws_client_port = v;
+        }
+        if let Some(v) = napcat.ws_server_host {
+            config.napcat.ws_server_host = v;
+        }
+        if let Some(v) = napcat.ws_server_port {
+            config.napcat.ws_server_port = v;
+        }
+        if let Some(v) = napcat.timeout_seconds {
+            config.napcat.timeout_seconds = v;
+        }
+        if let Some(v) = napcat.token {
+            config.napcat.token = v;
+        }
     }
 
-    if let Some(logging) = req.logging {
-        if let Some(v) = logging.level { config.logging.level = v; }
+    if let Some(logging) = req.logging
+        && let Some(v) = logging.level
+    {
+        config.logging.level = v;
     }
 
     if let Some(plugins) = req.plugins {
-        if let Some(v) = plugins.enabled { config.plugins.enabled = v; }
-        if let Some(v) = plugins.plugin_dir { config.plugins.plugin_dir = v; }
-        if let Some(v) = plugins.auto_load { config.plugins.auto_load = v; }
+        if let Some(v) = plugins.enabled {
+            config.plugins.enabled = v;
+        }
+        if let Some(v) = plugins.plugin_dir {
+            config.plugins.plugin_dir = v;
+        }
+        if let Some(v) = plugins.auto_load {
+            config.plugins.auto_load = v;
+        }
     }
 
     if let Some(webui) = req.webui {
-        if let Some(v) = webui.host { config.webui.host = v; }
-        if let Some(v) = webui.port { config.webui.port = v; }
-        if let Some(v) = webui.token { config.webui.token = v; }
+        if let Some(v) = webui.host {
+            config.webui.host = v;
+        }
+        if let Some(v) = webui.port {
+            config.webui.port = v;
+        }
+        if let Some(v) = webui.token {
+            config.webui.token = v;
+        }
     }
 
     if let Err(e) = config.save() {
-        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("保存配置失败: {e}"));
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("保存配置失败: {e}"),
+        );
     }
 
     info!("配置已更新");
@@ -1677,11 +1895,13 @@ async fn api_config_raw_get() -> impl IntoResponse {
             "ok": true,
             "path": path.to_string_lossy(),
             "content": content,
-        })).into_response(),
+        }))
+        .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"ok": false, "message": format!("读取配置失败: {e}")})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -1694,7 +1914,10 @@ async fn api_config_raw_put(Json(req): Json<RawConfigUpdate>) -> impl IntoRespon
 
     let path = crate::config::LNConfig::config_path();
     if let Err(e) = fs::write(&path, &req.content) {
-        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("写入配置失败: {e}"));
+        return json_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("写入配置失败: {e}"),
+        );
     }
 
     info!("原始配置已更新");
@@ -1810,13 +2033,12 @@ fn json_err(status: StatusCode, msg: &str) -> (StatusCode, Json<MsgResponse>) {
 /// 对于 `https://github.com/...` 形式的 URL，
 /// 镜像 URL 为 `https://ghfast.top/https://github.com/...`
 fn build_mirrored_urls(original: &str, mirrors: &[&str]) -> Vec<String> {
-    let mut urls = Vec::with_capacity(1 + mirrors.len());
     // 镜像优先，避免直连 GitHub 超时
-    for mirror in mirrors {
-        urls.push(format!("{}{}", mirror, original));
-    }
-    urls.push(original.to_string());
-    urls
+    mirrors
+        .iter()
+        .map(|mirror| format!("{}{}", mirror, original))
+        .chain(std::iter::once(original.to_string()))
+        .collect()
 }
 
 /// 带镜像 fallback 的 HTTP GET 请求
@@ -1837,12 +2059,10 @@ async fn fetch_with_fallback(urls: &[String]) -> Result<String, String> {
             .send()
             .await
         {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.text().await {
-                    Ok(body) => return Ok(body),
-                    Err(e) => last_err = format!("读取响应失败 ({url}): {e}"),
-                }
-            }
+            Ok(resp) if resp.status().is_success() => match resp.text().await {
+                Ok(body) => return Ok(body),
+                Err(e) => last_err = format!("读取响应失败 ({url}): {e}"),
+            },
             Ok(resp) => {
                 last_err = format!("HTTP {} ({url})", resp.status());
                 warn!("镜像请求失败: {}", last_err);
@@ -1876,9 +2096,16 @@ async fn download_with_fallback(
     for (i, url) in urls.iter().enumerate() {
         // 发送尝试进度
         let progress = (i as f32) / (total_urls as f32) * 0.8;
-        let is_mirror = url.contains("ghfast.top") || url.contains("ghproxy.cn") || url.contains("gitmirror.com") || url.contains("mirror.ghproxy.com");
+        let is_mirror = url.contains("ghfast.top")
+            || url.contains("ghproxy.cn")
+            || url.contains("gitmirror.com")
+            || url.contains("mirror.ghproxy.com");
         let source = if is_mirror { "镜像" } else { "直连" };
-        let host = if is_mirror { url.split('/').nth(2).unwrap_or("...") } else { "github.com" };
+        let host = if is_mirror {
+            url.split('/').nth(2).unwrap_or("...")
+        } else {
+            "github.com"
+        };
         let _ = progress_tx.send(DownloadProgress {
             plugin_name: plugin_name.to_string(),
             status: "downloading".to_string(),
@@ -1917,7 +2144,11 @@ async fn download_with_fallback(
                                 let _ = progress_tx.send(DownloadProgress {
                                     plugin_name: plugin_name.to_string(),
                                     status: "downloading".to_string(),
-                                    message: format!("已下载 {:.1} / {:.1} KB", downloaded as f64 / 1024.0, total_size as f64 / 1024.0),
+                                    message: format!(
+                                        "已下载 {:.1} / {:.1} KB",
+                                        downloaded as f64 / 1024.0,
+                                        total_size as f64 / 1024.0
+                                    ),
                                     progress: Some(progress),
                                 });
                                 last_report = std::time::Instant::now();
@@ -2005,13 +2236,10 @@ async fn fetch_beta_releases(
         request = request.header("If-None-Match", etag);
     }
 
-    let resp = request
-        .send()
-        .await
-        .map_err(|e| {
-            warn!("GitHub API 请求失败: {} - {}", repo, e);
-            format!("GitHub API 请求失败: {e}")
-        })?;
+    let resp = request.send().await.map_err(|e| {
+        warn!("GitHub API 请求失败: {} - {}", repo, e);
+        format!("GitHub API 请求失败: {e}")
+    })?;
 
     // 304 Not Modified - 使用缓存数据
     if resp.status() == 304 {
@@ -2033,7 +2261,8 @@ async fn fetch_beta_releases(
     }
 
     // 获取 ETag
-    let new_etag = resp.headers()
+    let new_etag = resp
+        .headers()
         .get("etag")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
@@ -2089,28 +2318,27 @@ fn parse_version_channel(tag: &str) -> (String, String) {
 /// 从 GitHub Release 转换为 BetaVersion
 fn convert_to_beta_version(release: &GitHubRelease) -> BetaVersion {
     let (version, channel) = parse_version_channel(&release.tag_name);
-    let mut assets = HashMap::new();
+    let assets = release
+        .assets
+        .iter()
+        .filter_map(|asset| {
+            let name = &asset.name;
+            let architecture = if name.contains("aarch64") || name.contains("arm64") {
+                "aarch64"
+            } else {
+                "x86_64"
+            };
+            let platform = if name.ends_with(".dll") {
+                "windows"
+            } else if name.ends_with(".so") {
+                "linux"
+            } else {
+                return None;
+            };
 
-    for asset in &release.assets {
-        let name = &asset.name;
-        if name.ends_with(".dll") {
-            // Windows 平台
-            if name.contains("aarch64") || name.contains("arm64") {
-                assets.insert("windows-aarch64".to_string(), name.clone());
-            } else {
-                // 默认假设 x86_64（包括没有架构信息的情况）
-                assets.insert("windows-x86_64".to_string(), name.clone());
-            }
-        } else if name.ends_with(".so") {
-            // Linux 平台
-            if name.contains("aarch64") || name.contains("arm64") {
-                assets.insert("linux-aarch64".to_string(), name.clone());
-            } else {
-                // 默认假设 x86_64（包括没有架构信息的情况）
-                assets.insert("linux-x86_64".to_string(), name.clone());
-            }
-        }
-    }
+            Some((format!("{platform}-{architecture}"), name.clone()))
+        })
+        .collect();
 
     BetaVersion {
         version,
@@ -2144,39 +2372,35 @@ fn find_enabled_file(dir: &PathBuf, name: &str) -> Option<PathBuf> {
     if !dir.exists() {
         return None;
     }
-    for entry in fs::read_dir(dir).ok()?.flatten() {
-        let path = entry.path();
-        let fname = path.file_name()?.to_string_lossy();
-        if fname.ends_with(".disabled") {
-            continue;
-        }
-        if let Some(pname) = extract_plugin_name(&fname) {
-            if pname == name {
-                return Some(path);
-            }
-        }
-    }
-    None
+
+    fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name().is_some_and(|file_name| {
+                let file_name = file_name.to_string_lossy();
+                !file_name.ends_with(".disabled") && extract_plugin_name(&file_name) == Some(name)
+            })
+        })
 }
 
 fn find_disabled_file(dir: &PathBuf, name: &str) -> Option<PathBuf> {
     if !dir.exists() {
         return None;
     }
-    for entry in fs::read_dir(dir).ok()?.flatten() {
-        let path = entry.path();
-        let fname = path.file_name()?.to_string_lossy();
-        if !fname.ends_with(".disabled") {
-            continue;
-        }
-        let base = fname.trim_end_matches(".disabled");
-        if let Some(pname) = extract_plugin_name(base) {
-            if pname == name {
-                return Some(path);
-            }
-        }
-    }
-    None
+
+    fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name().is_some_and(|file_name| {
+                let file_name = file_name.to_string_lossy();
+                file_name.ends_with(".disabled")
+                    && extract_plugin_name(file_name.trim_end_matches(".disabled")) == Some(name)
+            })
+        })
 }
 
 fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
@@ -2185,26 +2409,28 @@ fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
         return Vec::new();
     }
 
-    let mut plugins = Vec::new();
-    if let Ok(entries) = fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+    fs::read_dir(&dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| {
+                    let path = entry.path();
+                    let file_name = path.file_name()?.to_string_lossy();
+                    let name = extract_plugin_name(&file_name)?;
 
-            if let Some(name) = extract_plugin_name(&file_name) {
-                plugins.push(PluginInfo {
-                    name: name.to_string(),
-                    file: file_name.to_string(),
-                    enabled: !file_name.ends_with(".disabled"),
-                    version: String::new(),
-                    priority: 0,
-                    block_enabled: false,
-                    active: false,
-                });
-            }
-        }
-    }
-    plugins
+                    Some(PluginInfo {
+                        name: name.to_string(),
+                        file: file_name.to_string(),
+                        enabled: !file_name.ends_with(".disabled"),
+                        version: String::new(),
+                        priority: 0,
+                        block_enabled: false,
+                        active: false,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 获取版本文件路径
@@ -2350,7 +2576,10 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_extract_plugin_name_so() {
-        assert_eq!(extract_plugin_name("libplugin_doro.so"), Some("plugin_doro"));
+        assert_eq!(
+            extract_plugin_name("libplugin_doro.so"),
+            Some("plugin_doro")
+        );
         assert_eq!(extract_plugin_name("libmy_plugin.so"), Some("my_plugin"));
         // 没有 lib 前缀的也支持
         assert_eq!(extract_plugin_name("plugin_doro.so"), Some("plugin_doro"));
@@ -2431,11 +2660,17 @@ mod tests {
     #[test]
     fn test_mirror_urls_all_https() {
         for mirror in GITHUB_RAW_MIRRORS {
-            assert!(mirror.starts_with("https://"), "镜像必须使用 HTTPS: {mirror}");
+            assert!(
+                mirror.starts_with("https://"),
+                "镜像必须使用 HTTPS: {mirror}"
+            );
             assert!(mirror.ends_with('/'), "镜像前缀必须以 / 结尾: {mirror}");
         }
         for mirror in GITHUB_RELEASE_MIRRORS {
-            assert!(mirror.starts_with("https://"), "镜像必须使用 HTTPS: {mirror}");
+            assert!(
+                mirror.starts_with("https://"),
+                "镜像必须使用 HTTPS: {mirror}"
+            );
             assert!(mirror.ends_with('/'), "镜像前缀必须以 / 结尾: {mirror}");
         }
     }
@@ -2455,9 +2690,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_with_fallback_success() {
         // 使用 httpbin 的稳定公共端点
-        let urls = vec![
-            "https://httpbin.org/get".to_string(),
-        ];
+        let urls = vec!["https://httpbin.org/get".to_string()];
         let result = fetch_with_fallback(&urls).await;
         assert!(result.is_ok(), "正常 URL 应成功: {:?}", result.err());
         let body = result.unwrap();
@@ -2471,7 +2704,11 @@ mod tests {
             "https://httpbin.org/get".to_string(),
         ];
         let result = fetch_with_fallback(&urls).await;
-        assert!(result.is_ok(), "第一个失败后应 fallback 到第二个: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "第一个失败后应 fallback 到第二个: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
