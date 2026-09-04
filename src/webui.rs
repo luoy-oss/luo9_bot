@@ -2318,28 +2318,27 @@ fn parse_version_channel(tag: &str) -> (String, String) {
 /// 从 GitHub Release 转换为 BetaVersion
 fn convert_to_beta_version(release: &GitHubRelease) -> BetaVersion {
     let (version, channel) = parse_version_channel(&release.tag_name);
-    let mut assets = HashMap::new();
+    let assets = release
+        .assets
+        .iter()
+        .filter_map(|asset| {
+            let name = &asset.name;
+            let architecture = if name.contains("aarch64") || name.contains("arm64") {
+                "aarch64"
+            } else {
+                "x86_64"
+            };
+            let platform = if name.ends_with(".dll") {
+                "windows"
+            } else if name.ends_with(".so") {
+                "linux"
+            } else {
+                return None;
+            };
 
-    for asset in &release.assets {
-        let name = &asset.name;
-        if name.ends_with(".dll") {
-            // Windows 平台
-            if name.contains("aarch64") || name.contains("arm64") {
-                assets.insert("windows-aarch64".to_string(), name.clone());
-            } else {
-                // 默认假设 x86_64（包括没有架构信息的情况）
-                assets.insert("windows-x86_64".to_string(), name.clone());
-            }
-        } else if name.ends_with(".so") {
-            // Linux 平台
-            if name.contains("aarch64") || name.contains("arm64") {
-                assets.insert("linux-aarch64".to_string(), name.clone());
-            } else {
-                // 默认假设 x86_64（包括没有架构信息的情况）
-                assets.insert("linux-x86_64".to_string(), name.clone());
-            }
-        }
-    }
+            Some((format!("{platform}-{architecture}"), name.clone()))
+        })
+        .collect();
 
     BetaVersion {
         version,
