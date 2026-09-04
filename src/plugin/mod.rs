@@ -1,51 +1,47 @@
 // src/plugin/mod.rs
 pub mod bus;
-pub mod manager;
-pub mod loader;
-pub mod handle;
 pub mod data;
-pub mod task;
-pub mod sender;
-pub mod version;
 pub mod dispatch;
-pub mod runtime;
-pub mod native_runtime;
 pub mod embedded;
+pub mod handle;
+pub mod loader;
+pub mod manager;
+pub mod native_runtime;
+pub mod runtime;
+pub mod sender;
+pub mod task;
+pub mod version;
 
 // 重新导出常用类型和函数
-pub use manager::{
-    PluginManager,
-    PluginInfo,
-    GLOBAL_PLUGIN_MANAGER,
-    init_global_manager,
-    get_manager_stats
+pub use dispatch::{
+    priority_dispatch_message, priority_dispatch_meta_event, priority_dispatch_notice,
+    priority_dispatch_request, update_dispatch_list,
 };
 pub use loader::PluginLoader;
-pub use dispatch::{
-    update_dispatch_list,
-    priority_dispatch_message,
-    priority_dispatch_notice,
-    priority_dispatch_meta_event,
-    priority_dispatch_request,
+pub use manager::{
+    GLOBAL_PLUGIN_MANAGER, PluginInfo, PluginManager, get_manager_stats, init_global_manager,
 };
 
-use tracing::{error, info};
-use std::sync::Once;
-use crate::message::Message;
 use crate::event::MetaEvent;
+use crate::message::Message;
 use crate::notice::Notice;
 use crate::request::Request;
+use std::sync::Once;
+use tracing::{error, info};
 
 static BACKGROUND_TASKS: Once = Once::new();
 
 /// 初始化插件系统
-pub async fn initialize(plugins_dir: &str, config_entries: &[crate::config::PluginEntry]) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn initialize(
+    plugins_dir: &str,
+    config_entries: &[crate::config::PluginEntry],
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("正在初始化插件系统...");
 
     // 初始化 FFI 总线（无界队列，不丢消息）
     if let Err(e) = bus::Bus::init() {
         error!("FFI 总线初始化失败: {:?}", e);
-        return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Bus init failed")));
+        return Err(Box::new(std::io::Error::other("Bus init failed")));
     }
 
     // 先启动总线接收器，再加载插件，避免插件发布消息时接收器尚未订阅

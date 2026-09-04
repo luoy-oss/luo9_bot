@@ -1,9 +1,7 @@
 // src/plugin/bus.rs
 
+pub use luo9_sdk::bus::{Bus, BusError};
 use tracing::{debug, error, info};
-pub use luo9_sdk::bus::{
-    Bus, BusError
-};
 
 use super::data::PluginData;
 
@@ -54,14 +52,16 @@ where
         let sub_id = Bus::topic(topic_name)
             .subscribe()
             .unwrap_or_else(|e| panic!("订阅 {} topic 失败: {:?}", topic_name, e));
-        info!("bus 接收器已启动: topic={}, subscriber_id={}", topic_name, sub_id);
+        info!(
+            "bus 接收器已启动: topic={}, subscriber_id={}",
+            topic_name, sub_id
+        );
 
         loop {
-            let result = tokio::task::spawn_blocking({
-                move || Bus::topic(topic_name).wait_pop(sub_id)
-            })
-            .await
-            .expect("spawn_blocking panicked");
+            let result =
+                tokio::task::spawn_blocking(move || Bus::topic(topic_name).wait_pop(sub_id))
+                    .await
+                    .expect("spawn_blocking panicked");
 
             match result {
                 Ok(json) => handler(json).await,

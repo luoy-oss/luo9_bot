@@ -64,6 +64,9 @@ pub async fn query_versions(timeout: Duration) {
         manager.get_all_plugins().len()
     };
 
-    info!("[version] 版本查询完成: {}/{} 个插件已响应", responded, total);
+    info!(
+        "[version] 版本查询完成: {}/{} 个插件已响应",
+        responded, total
+    );
     let _ = bus::Bus::topic(bus::TOPIC_VERSION_REPLY).unsubscribe(reply_sub);
 }

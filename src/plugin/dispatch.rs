@@ -3,12 +3,12 @@ use std::sync::RwLock;
 use tracing::{error, info};
 
 use super::bus::Bus;
+use super::data::PluginData;
 use super::manager::{DispatchEntry, GLOBAL_PLUGIN_MANAGER};
-use crate::message::Message;
 use crate::event::MetaEvent;
+use crate::message::Message;
 use crate::notice::Notice;
 use crate::request::Request;
-use super::data::PluginData;
 
 /// 优先级分发列表（无锁快速路径读取）
 static DISPATCH_LIST: RwLock<Vec<DispatchEntry>> = RwLock::new(Vec::new());
@@ -19,11 +19,22 @@ pub fn update_dispatch_list(entries: Vec<DispatchEntry>) {
         Ok(mut list) => {
             info!("[dispatch] 分发列表更新，共 {} 个活跃插件:", entries.len());
             for e in &entries {
-                let msg = e.message_sub_id.map(|v| v.to_string()).unwrap_or_else(|| "无".into());
-                let notice = e.notice_sub_id.map(|v| v.to_string()).unwrap_or_else(|| "无".into());
-                let meta = e.meta_event_sub_id.map(|v| v.to_string()).unwrap_or_else(|| "无".into());
-                info!("  - {} (priority={}, block={}, msg_sub={}, notice_sub={}, meta_sub={})",
-                    e.name, e.priority, e.block_enabled, msg, notice, meta);
+                let msg = e
+                    .message_sub_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "无".into());
+                let notice = e
+                    .notice_sub_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "无".into());
+                let meta = e
+                    .meta_event_sub_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "无".into());
+                info!(
+                    "  - {} (priority={}, block={}, msg_sub={}, notice_sub={}, meta_sub={})",
+                    e.name, e.priority, e.block_enabled, msg, notice, meta
+                );
             }
             *list = entries;
         }
@@ -71,8 +82,10 @@ pub fn priority_dispatch_message(msg: Message) {
         match Bus::topic(super::bus::TOPIC_MESSAGE).publish_to(&payload, &[sub_id]) {
             Ok(()) => {
                 let elapsed = start.elapsed().as_micros() as u64;
-                info!("[dispatch] 已分发消息到 {} (sub_id={}, priority={}, 耗时={}μs)",
-                    entry.name, sub_id, entry.priority, elapsed);
+                info!(
+                    "[dispatch] 已分发消息到 {} (sub_id={}, priority={}, 耗时={}μs)",
+                    entry.name, sub_id, entry.priority, elapsed
+                );
 
                 // 更新统计
                 if let Ok(mut manager) = GLOBAL_PLUGIN_MANAGER.try_lock() {
@@ -118,7 +131,9 @@ pub fn priority_dispatch_notice(notice: Notice) {
     }
 
     for entry in list.iter() {
-        let Some(sub_id) = entry.notice_sub_id else { continue };
+        let Some(sub_id) = entry.notice_sub_id else {
+            continue;
+        };
 
         let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_NOTICE).publish_to(&payload, &[sub_id]) {
@@ -163,7 +178,9 @@ pub fn priority_dispatch_meta_event(event: MetaEvent) {
     }
 
     for entry in list.iter() {
-        let Some(sub_id) = entry.meta_event_sub_id else { continue };
+        let Some(sub_id) = entry.meta_event_sub_id else {
+            continue;
+        };
 
         let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_META_EVENT).publish_to(&payload, &[sub_id]) {
@@ -208,7 +225,9 @@ pub fn priority_dispatch_request(request: Request) {
     }
 
     for entry in list.iter() {
-        let Some(sub_id) = entry.request_sub_id else { continue };
+        let Some(sub_id) = entry.request_sub_id else {
+            continue;
+        };
 
         let start = std::time::Instant::now();
         if let Err(e) = Bus::topic(super::bus::TOPIC_REQUEST).publish_to(&payload, &[sub_id]) {
