@@ -1,12 +1,8 @@
-#[allow(unused_imports)]
-use luo9_sdk;
-
-
 pub mod config;
-pub mod error;
 pub mod connection;
-pub mod utils;
+pub mod error;
 pub mod handler;
+pub mod utils;
 
 pub mod event;
 pub mod message;
@@ -19,20 +15,19 @@ pub mod webui;
 
 use config::LNConfig;
 use error::Result;
-use tracing::{info, warn};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tracing::{info, warn};
 
 use plugin as Plugin;
 
-/// 全局重启信号
+// 全局重启信号
 lazy_static::lazy_static! {
     pub static ref RESTART_TX: watch::Sender<bool> = {
         let (tx, _rx) = watch::channel(false);
         tx
     };
 }
-
 
 /// 应用上下文
 pub struct LNContext {
@@ -50,7 +45,8 @@ impl LNContext {
         // 设置 panic hook，防止插件 panic 导致进程崩溃
         // 插件是 extern "C" 函数，catch_unwind 无法捕获跨越 FFI 边界的 panic
         std::panic::set_hook(Box::new(|panic_info| {
-            let location = panic_info.location()
+            let location = panic_info
+                .location()
                 .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
                 .unwrap_or_else(|| "unknown".to_string());
             let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
@@ -63,14 +59,15 @@ impl LNContext {
             tracing::error!("插件 panic at {}: {}", location, message);
         }));
 
-        info!("当前核心版本: luo9_core < {} >", luo9_sdk::Bot::get_version());
+        info!(
+            "当前核心版本: luo9_core < {} >",
+            luo9_sdk::Bot::get_version()
+        );
 
         info!("开始初始化应用...");
 
-        let rx = connection::Receiver::new(
-            &config.napcat.ws_client_host,
-            config.napcat.ws_client_port,
-        );
+        let rx =
+            connection::Receiver::new(&config.napcat.ws_client_host, config.napcat.ws_client_port);
 
         // 尝试连接 Napcat API，失败时不中断程序
         let tx = match connection::Sender::connect(
@@ -78,7 +75,9 @@ impl LNContext {
             config.napcat.ws_server_port,
             config.napcat.timeout_seconds,
             &config.napcat.token,
-        ).await {
+        )
+        .await
+        {
             Ok(sender) => {
                 info!("✓ Napcat API 连接成功");
                 Some(sender)
@@ -138,7 +137,7 @@ impl LNContext {
             retry_task,
         })
     }
-    
+
     /// 启动应用
     pub async fn run(&mut self) -> Result<()> {
         info!("启动 Napcat Bridge...");
@@ -159,16 +158,20 @@ impl LNContext {
                 }
                 Err(e) => {
                     tracing::warn!("⚠ Napcat API 连接异常: {}", e);
-                    tracing::warn!("请确保 Napcat 已启动并监听 {}:{}",
+                    tracing::warn!(
+                        "请确保 Napcat 已启动并监听 {}:{}",
                         self.config.napcat.ws_server_host,
-                        self.config.napcat.ws_server_port);
+                        self.config.napcat.ws_server_port
+                    );
                 }
             }
         } else {
             tracing::warn!("⚠ Napcat API 未连接，插件功能不可用");
-            tracing::warn!("请确保 Napcat 已启动并监听 {}:{}",
+            tracing::warn!(
+                "请确保 Napcat 已启动并监听 {}:{}",
                 self.config.napcat.ws_server_host,
-                self.config.napcat.ws_server_port);
+                self.config.napcat.ws_server_port
+            );
         }
 
         info!("应用已启动，等待消息...");
@@ -211,4 +214,3 @@ impl LNContext {
         info!("资源释放完成");
     }
 }
-
