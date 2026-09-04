@@ -526,14 +526,12 @@ pub async fn start(host: &str, port: u16, plugin_dir: String, config_token: Stri
 
 /// 从 query 字符串中提取指定参数值
 fn extract_query_param(query: &str, key: &str) -> Option<String> {
-    for pair in query.split('&') {
-        if let Some((k, v)) = pair.split_once('=') {
-            if k == key {
-                return Some(v.to_string());
-            }
-        }
-    }
-    None
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find_map(|(candidate, value)| {
+            (candidate == key).then(|| value.to_string())
+        })
 }
 
 /// API 鉴权中间件：检查 query 参数或 cookie 中的 token
@@ -819,14 +817,14 @@ async fn api_plugins(State(state): State<Arc<WebuiState>>) -> impl IntoResponse 
 
     // 从插件管理器获取运行时信息
     let manager = crate::plugin::GLOBAL_PLUGIN_MANAGER.lock().await;
-    for plugin in &mut plugins {
+    plugins.iter_mut().for_each(|plugin| {
         if let Some(info) = manager.get_plugin_info(&plugin.name) {
             plugin.version = info.version.clone();
             plugin.priority = info.priority;
             plugin.block_enabled = info.block_enabled;
             plugin.active = info.active;
         }
-    }
+    });
 
     Json(plugins)
 }
@@ -1823,13 +1821,12 @@ fn json_err(status: StatusCode, msg: &str) -> (StatusCode, Json<MsgResponse>) {
 /// 对于 `https://github.com/...` 形式的 URL，
 /// 镜像 URL 为 `https://ghfast.top/https://github.com/...`
 fn build_mirrored_urls(original: &str, mirrors: &[&str]) -> Vec<String> {
-    let mut urls = Vec::with_capacity(1 + mirrors.len());
     // 镜像优先，避免直连 GitHub 超时
-    for mirror in mirrors {
-        urls.push(format!("{}{}", mirror, original));
-    }
-    urls.push(original.to_string());
-    urls
+    mirrors
+        .iter()
+        .map(|mirror| format!("{}{}", mirror, original))
+        .chain(std::iter::once(original.to_string()))
+        .collect()
 }
 
 /// 带镜像 fallback 的 HTTP GET 请求
@@ -2157,39 +2154,37 @@ fn find_enabled_file(dir: &PathBuf, name: &str) -> Option<PathBuf> {
     if !dir.exists() {
         return None;
     }
-    for entry in fs::read_dir(dir).ok()?.flatten() {
-        let path = entry.path();
-        let fname = path.file_name()?.to_string_lossy();
-        if fname.ends_with(".disabled") {
-            continue;
-        }
-        if let Some(pname) = extract_plugin_name(&fname) {
-            if pname == name {
-                return Some(path);
-            }
-        }
-    }
-    None
+
+    fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name().is_some_and(|file_name| {
+                let file_name = file_name.to_string_lossy();
+                !file_name.ends_with(".disabled")
+                    && extract_plugin_name(&file_name) == Some(name)
+            })
+        })
 }
 
 fn find_disabled_file(dir: &PathBuf, name: &str) -> Option<PathBuf> {
     if !dir.exists() {
         return None;
     }
-    for entry in fs::read_dir(dir).ok()?.flatten() {
-        let path = entry.path();
-        let fname = path.file_name()?.to_string_lossy();
-        if !fname.ends_with(".disabled") {
-            continue;
-        }
-        let base = fname.trim_end_matches(".disabled");
-        if let Some(pname) = extract_plugin_name(base) {
-            if pname == name {
-                return Some(path);
-            }
-        }
-    }
-    None
+
+    fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name().is_some_and(|file_name| {
+                let file_name = file_name.to_string_lossy();
+                file_name.ends_with(".disabled")
+                    && extract_plugin_name(file_name.trim_end_matches(".disabled"))
+                        == Some(name)
+            })
+        })
 }
 
 fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
@@ -2198,26 +2193,28 @@ fn scan_plugins(plugin_dir: &str) -> Vec<PluginInfo> {
         return Vec::new();
     }
 
-    let mut plugins = Vec::new();
-    if let Ok(entries) = fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+    fs::read_dir(&dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| {
+                    let path = entry.path();
+                    let file_name = path.file_name()?.to_string_lossy();
+                    let name = extract_plugin_name(&file_name)?;
 
-            if let Some(name) = extract_plugin_name(&file_name) {
-                plugins.push(PluginInfo {
-                    name: name.to_string(),
-                    file: file_name.to_string(),
-                    enabled: !file_name.ends_with(".disabled"),
-                    version: String::new(),
-                    priority: 0,
-                    block_enabled: false,
-                    active: false,
-                });
-            }
-        }
-    }
-    plugins
+                    Some(PluginInfo {
+                        name: name.to_string(),
+                        file: file_name.to_string(),
+                        enabled: !file_name.ends_with(".disabled"),
+                        version: String::new(),
+                        priority: 0,
+                        block_enabled: false,
+                        active: false,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 获取版本文件路径
