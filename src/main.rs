@@ -1,14 +1,26 @@
 use luo9_bot::LNContext;
-use tracing::{info, error};
-use luo9_bot::handler::core;
 use luo9_bot::error::Result;
+use luo9_bot::handler::core;
+use tracing::{error, info};
+
+#[cfg(unix)]
+fn restart_current_process() -> Result<()> {
+    use std::os::unix::process::CommandExt;
+
+    let executable = std::env::current_exe()?;
+    let error = std::process::Command::new(executable)
+        .args(std::env::args_os().skip(1))
+        .exec();
+
+    Err(error.into())
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     loop {
         info!("正在初始化应用...");
         let mut ctx: LNContext = LNContext::initialize().await?;
-        
+
         // 启动 WebUI（不依赖 WebSocket 连接）
         let webui_cfg = ctx.config.webui.clone();
         let plugin_dir = ctx.config.plugins.plugin_dir.clone();
@@ -16,14 +28,20 @@ async fn main() -> Result<()> {
 
         let webui_task = if webui_cfg.enabled {
             Some(tokio::spawn(async move {
-                luo9_bot::webui::start(&webui_cfg.host, webui_cfg.port, plugin_dir, webui_cfg.token, ws_connected).await;
+                luo9_bot::webui::start(
+                    &webui_cfg.host,
+                    webui_cfg.port,
+                    plugin_dir,
+                    webui_cfg.token,
+                    ws_connected,
+                )
+                .await;
             }))
         } else {
             None
         };
 
         ctx.run().await?;
-        
 
         // 启动消息接收器
         let rx = ctx.rx.clone();
@@ -66,11 +84,20 @@ async fn main() -> Result<()> {
                     }
 
                     ctx.shutdown().await;
-                    // 重置信号
-                    luo9_bot::RESTART_TX.send(false).ok();
-                    info!("资源已释放，即将重新初始化...");
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    continue;
+
+                    #[cfg(unix)]
+                    {
+                        info!("资源已释放，即将替换当前进程...");
+                        return restart_current_process();
+                    }
+
+                    #[cfg(not(unix))]
+                    {
+                        luo9_bot::RESTART_TX.send(false).ok();
+                        info!("资源已释放，即将重新初始化...");
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
                 }
             }
         }
