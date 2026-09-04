@@ -87,30 +87,30 @@ fn run_jvm_plugin(plugin_path: &Path, plugin_name: &str, _subscriber_ids: &HashM
     let mut classpath_parts: Vec<String> = vec![plugin_jar.to_string()];
 
     // SDK JAR（如果有编译产物）
-    if sdk_jar_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&sdk_jar_dir) {
-            classpath_parts.extend(
-                entries
-                    .flatten()
-                    .map(|entry| entry.path())
-                    .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
-                    .map(|path| path.to_string_lossy().to_string()),
-            );
-        }
+    if sdk_jar_dir.exists()
+        && let Ok(entries) = std::fs::read_dir(&sdk_jar_dir)
+    {
+        classpath_parts.extend(
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
+                .map(|path| path.to_string_lossy().to_string()),
+        );
     }
 
     // 插件同目录下的其他 JAR（依赖库）
-    if let Some(parent) = plugin_path.parent() {
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            classpath_parts.extend(
-                entries
-                    .flatten()
-                    .map(|entry| entry.path())
-                    .filter(|path| path != plugin_path)
-                    .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
-                    .map(|path| path.to_string_lossy().to_string()),
-            );
-        }
+    if let Some(parent) = plugin_path.parent()
+        && let Ok(entries) = std::fs::read_dir(parent)
+    {
+        classpath_parts.extend(
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path != plugin_path)
+                .filter(|path| path.extension().is_some_and(|ext| ext == "jar"))
+                .map(|path| path.to_string_lossy().to_string()),
+        );
     }
 
     let separator = if cfg!(windows) { ";" } else { ":" };
