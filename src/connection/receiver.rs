@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message};
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// WebSocket 接收器 - 作为服务器接收 Napcat 推送的消息
 #[derive(Clone)]
@@ -29,23 +29,23 @@ impl Receiver {
     pub async fn start(&self) -> Result<()> {
         self.napcat_start().await
     }
-    
+
     /// 启动服务器
     pub async fn napcat_start(&self) -> Result<()> {
         let addr = format!("{}:{}", self.host, self.port);
         let listener = TcpListener::bind(&addr).await?;
-        
+
         info!("Napcat 接收器已启动: ws://{}", addr);
         info!("等待 Napcat 连接... 最长等待时间与你在napcat配置的心跳时间相同（默认30秒）");
-        
+
         let clients = self.clients.clone();
-        
+
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     info!("Napcat 已连接: {}", addr);
                     let clients_clone = clients.clone();
-                    
+
                     tokio::spawn(async move {
                         match accept_async(stream).await {
                             Ok(ws_stream) => {
@@ -64,14 +64,14 @@ impl Receiver {
             }
         }
     }
-    
+
     /// 接收一条消息
     pub async fn receive_one(&self) -> Result<Option<Value>> {
         let mut clients = self.clients.lock().await;
-        
+
         for i in (0..clients.len()).rev() {
             let client = &mut clients[i];
-            
+
             match client.next().await {
                 Some(Ok(Message::Text(text))) => {
                     let data: Value = serde_json::from_str(&text)?;
@@ -92,7 +92,7 @@ impl Receiver {
                 _ => {}
             }
         }
-        
+
         Ok(None)
     }
 }

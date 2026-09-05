@@ -3,11 +3,10 @@ use crate::event::MetaEvent;
 use crate::event::MetaEventType;
 use crate::plugin::dispatch_meta_event;
 
-use crate::error::{Result, LNErr};
+use crate::error::{LNErr, Result};
 
 // use tracing::info;
 // use tracing::warn;
-
 
 #[cfg(feature = "napcat")]
 pub fn handle_event(meta_event: MetaEvent) -> Result<()> {
@@ -37,7 +36,7 @@ pub fn handle_event(meta_event: MetaEvent) -> Result<()> {
         // },
         MetaEventType::Heartbeat | MetaEventType::Lifecycle => {
             dispatch_meta_event(meta_event);
-        },
+        }
         _ => {
             use tracing::warn;
             warn!("不支持的事件类型: {:?}", meta_event.meta_event_type);

@@ -4,8 +4,8 @@ use serde_json::Value;
 /// 请求类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequestType {
-    Friend,  // 好友请求
-    Group,   // 群请求
+    Friend, // 好友请求
+    Group,  // 群请求
     Unknown,
 }
 
@@ -22,8 +22,8 @@ impl Serialize for RequestType {
 /// 群请求子类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum GroupRequestSubType {
-    Add,     // 加群请求
-    Invite,  // 邀请入群
+    Add,    // 加群请求
+    Invite, // 邀请入群
     Unknown,
 }
 
@@ -68,12 +68,14 @@ impl Request {
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
 
-        let comment = data.get("comment")
+        let comment = data
+            .get("comment")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let flag = data.get("flag")
+        let flag = data
+            .get("flag")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
