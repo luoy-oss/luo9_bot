@@ -19,7 +19,7 @@ quickjs-plugin = ["dep:rquickjs"]      # 嵌入 QuickJS (rquickjs)
 default = ["napcat"]
 
 [dependencies]
-luo9_sdk = "0.7.1"
+luo9_sdk = "0.8.0-beta.1"
 # luo9_sdk = { path = "H:\\github\\luo9_bot\\sdk\\rust" }
 
 # 异步运行时
