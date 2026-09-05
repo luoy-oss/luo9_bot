@@ -12,6 +12,7 @@ pub const TOPIC_REQUEST: &str = "luo9_request";
 pub const TOPIC_TASK_MISO: &str = "luo9_task_miso";
 pub const TOPIC_TASK: &str = "luo9_task";
 pub const TOPIC_SEND: &str = "luo9_send";
+pub const TOPIC_SENT: &str = "luo9_sent";
 pub const TOPIC_VERSION: &str = "luo9_version";
 pub const TOPIC_VERSION_REPLY: &str = "luo9_version_reply";
 

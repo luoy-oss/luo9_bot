@@ -1,12 +1,19 @@
 use std::sync::Arc;
 
-use crate::error::Result;
-use futures_util::{SinkExt, StreamExt, lock::Mutex, stream::{SplitSink, SplitStream}};
-use serde_json::{json, Value};
-use tokio::net::TcpStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::{client::IntoClientRequest, http::HeaderValue, protocol::Message}};
-use tracing::{info, error};
 use crate::error::LNErr;
+use crate::error::Result;
+use futures_util::{
+    SinkExt, StreamExt,
+    lock::Mutex,
+    stream::{SplitSink, SplitStream},
+};
+use serde_json::{Value, json};
+use tokio::net::TcpStream;
+use tokio_tungstenite::{
+    MaybeTlsStream, WebSocketStream, connect_async,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, protocol::Message},
+};
+use tracing::{error, info};
 
 /// WebSocket 发送器 - 作为客户端连接 Napcat API
 #[derive(Clone)]
@@ -16,26 +23,35 @@ pub struct Sender {
     timeout_seconds: u64,
 }
 
-
 impl Sender {
-    pub async fn connect(host: impl Into<String>, port: u16, timeout_seconds: u64, token: impl Into<String>) -> Result<Self> {
+    pub async fn connect(
+        host: impl Into<String>,
+        port: u16,
+        timeout_seconds: u64,
+        token: impl Into<String>,
+    ) -> Result<Self> {
         let host = host.into();
         let token = token.into();
         let url = format!("ws://{}:{}", host, port);
 
-        info!("连接 Napcat API: {} timeout_seconds： {} token: {}", url, timeout_seconds, token);
+        info!(
+            "连接 Napcat API: {} timeout_seconds： {} token: {}",
+            url, timeout_seconds, token
+        );
         let mut request = url.clone().into_client_request()?;
 
         // 建立连接
         // 添加Header 添加参数 Authorization，其值为在 Bearer 之后拼接 Token
-        request.headers_mut().insert("Authorization",
-        HeaderValue::from_str(&format!("Bearer {}", token))
-            .map_err(|e| LNErr::InvalidHeaderValue(format!("Authorization 头值错误: {}", e)))?);
+        request.headers_mut().insert(
+            "Authorization",
+            HeaderValue::from_str(&format!("Bearer {}", token))
+                .map_err(|e| LNErr::InvalidHeaderValue(format!("Authorization 头值错误: {}", e)))?,
+        );
 
         let (ws_stream, _) = connect_async(request).await?;
         let (write, read) = ws_stream.split();
 
-         Ok(Self {
+        Ok(Self {
             write: Arc::new(Mutex::new(write)),
             read: Arc::new(Mutex::new(read)),
             timeout_seconds,
@@ -63,31 +79,26 @@ impl Sender {
         // 等待响应（带超时）
         let timeout = tokio::time::Duration::from_secs(self.timeout_seconds);
         match tokio::time::timeout(timeout, read.next()).await {
-            Ok(Some(Ok(msg))) => {
-                match msg {
-                    Message::Text(text) => {
-                        let response: Value = serde_json::from_str(&text)?;
-                        Ok(response)
-                    }
-                    Message::Binary(bin) => {
-                        let response: Value = serde_json::from_slice(&bin)?;
-                        Ok(response)
-                    }
-                    _ => {
-                        Err(LNErr::Config("未收到有效响应".into()))
-                    }
+            Ok(Some(Ok(msg))) => match msg {
+                Message::Text(text) => {
+                    let response: Value = serde_json::from_str(&text)?;
+                    Ok(response)
                 }
-            }
+                Message::Binary(bin) => {
+                    let response: Value = serde_json::from_slice(&bin)?;
+                    Ok(response)
+                }
+                _ => Err(LNErr::Config("未收到有效响应".into())),
+            },
             Ok(Some(Err(e))) => {
                 error!("WebSocket 接收错误: {}", e);
                 Err(LNErr::Config(format!("WebSocket 接收错误: {}", e)))
             }
-            Ok(None) => {
-                Err(LNErr::Config("连接已关闭".into()))
-            }
-            Err(_) => {
-                Err(LNErr::Config(format!("请求超时 ({}秒)", self.timeout_seconds)))
-            }
+            Ok(None) => Err(LNErr::Config("连接已关闭".into())),
+            Err(_) => Err(LNErr::Config(format!(
+                "请求超时 ({}秒)",
+                self.timeout_seconds
+            ))),
         }
     }
 
@@ -112,5 +123,20 @@ impl Sender {
             "message": message
         });
         self.send_api("send_group_msg", params).await
+    }
+
+    /// 撤回消息（NapCat: delete_msg）
+    pub async fn delete_msg(&self, message_id: u64) -> Result<Value> {
+        let params = json!({ "message_id": message_id });
+        self.send_api("delete_msg", params).await
+    }
+
+    /// 设置消息表情回应（NapCat: set_msg_emoji_like）
+    pub async fn set_msg_emoji_like(&self, message_id: u64, emoji_id: u64) -> Result<Value> {
+        let params = json!({
+            "message_id": message_id,
+            "emoji_id": emoji_id
+        });
+        self.send_api("set_msg_emoji_like", params).await
     }
 }
