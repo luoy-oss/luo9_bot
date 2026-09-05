@@ -2495,13 +2495,19 @@ mod tests {
     #[test]
     fn test_build_mirrored_urls_registry() {
         let urls = build_mirrored_urls(REGISTRY_URL, GITHUB_RAW_MIRRORS);
-        // 原始 URL + 3 个镜像
+        // 镜像优先（每个镜像 = 前缀 + 完整原始地址），原始直连在最后兜底
         assert_eq!(urls.len(), 1 + GITHUB_RAW_MIRRORS.len());
-        assert_eq!(urls[0], REGISTRY_URL);
-        assert!(urls[1].starts_with("https://ghfast.top/"));
-        assert!(urls[1].ends_with("registry.json"));
-        assert!(urls[2].starts_with("https://ghproxy.cn/"));
-        assert!(urls[3].starts_with("https://raw.gitmirror.com/"));
+        for (mirror, url) in GITHUB_RAW_MIRRORS
+            .iter()
+            .zip(&urls[..GITHUB_RAW_MIRRORS.len()])
+        {
+            assert!(url.starts_with(mirror), "镜像前缀不符: {url}");
+            assert!(
+                url.ends_with(REGISTRY_URL),
+                "镜像 URL 应以原始地址结尾: {url}"
+            );
+        }
+        assert_eq!(urls[GITHUB_RAW_MIRRORS.len()], REGISTRY_URL);
     }
 
     #[test]
@@ -2509,12 +2515,14 @@ mod tests {
         let primary = "https://github.com/luo9-bot/plugin/releases/download/v1.0/plugin.dll";
         let urls = build_mirrored_urls(primary, GITHUB_RELEASE_MIRRORS);
         assert_eq!(urls.len(), 1 + GITHUB_RELEASE_MIRRORS.len());
-        assert_eq!(urls[0], primary);
-        // 镜像 URL = 前缀 + 原始 URL
-        assert_eq!(
-            urls[1],
-            "https://ghfast.top/https://github.com/luo9-bot/plugin/releases/download/v1.0/plugin.dll"
-        );
+        for (mirror, url) in GITHUB_RELEASE_MIRRORS
+            .iter()
+            .zip(&urls[..GITHUB_RELEASE_MIRRORS.len()])
+        {
+            assert!(url.starts_with(mirror), "镜像前缀不符: {url}");
+            assert!(url.ends_with(primary), "镜像 URL 应以原始地址结尾: {url}");
+        }
+        assert_eq!(urls[GITHUB_RELEASE_MIRRORS.len()], primary);
     }
 
     #[test]

@@ -1,5 +1,5 @@
-use crate::request::Request;
 use crate::error::Result;
+use crate::request::Request;
 use tracing::info;
 
 #[cfg(feature = "napcat")]

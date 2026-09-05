@@ -1,8 +1,8 @@
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use crate::error::Result;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LNConfig {
@@ -39,7 +39,9 @@ pub struct PluginEntry {
     pub block_enabled: bool,
 }
 
-fn default_priority() -> i32 { 0 }
+fn default_priority() -> i32 {
+    0
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginConfig {
@@ -162,20 +164,31 @@ impl LNConfig {
 
     /// 更新或插入插件配置条目
     pub fn upsert_plugin_entry(&mut self, entry: PluginEntry) {
-        if let Some(existing) = self.plugins.plugins.iter_mut().find(|p| p.name == entry.name) {
+        if let Some(existing) = self
+            .plugins
+            .plugins
+            .iter_mut()
+            .find(|p| p.name == entry.name)
+        {
             existing.priority = entry.priority;
             existing.block_enabled = entry.block_enabled;
         } else {
             self.plugins.plugins.push(entry);
         }
     }
-    
+
     // 修复 receiver_url 和 sender_url 方法
     pub fn receiver_url(&self) -> String {
-        format!("ws://{}:{}", self.napcat.ws_client_host, self.napcat.ws_client_port)
+        format!(
+            "ws://{}:{}",
+            self.napcat.ws_client_host, self.napcat.ws_client_port
+        )
     }
-    
+
     pub fn sender_url(&self) -> String {
-        format!("ws://{}:{}", self.napcat.ws_server_host, self.napcat.ws_server_port)
+        format!(
+            "ws://{}:{}",
+            self.napcat.ws_server_host, self.napcat.ws_server_port
+        )
     }
 }

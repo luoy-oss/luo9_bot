@@ -90,23 +90,30 @@ impl Message {
             _ => MsgType::Other,
         };
 
-        let sub_type = SubType::deserialize(
-            data.get("sub_type").unwrap_or(&Value::Null)
-        ).unwrap_or(SubType::None);
+        let sub_type = SubType::deserialize(data.get("sub_type").unwrap_or(&Value::Null))
+            .unwrap_or(SubType::None);
 
-        let message_id = data.get("message_id")
+        let message_id = data
+            .get("message_id")
             .and_then(|v| v.as_u64())
-            .or_else(|| data.get("message_id").and_then(|v| v.as_str().and_then(|s| s.parse().ok())))
+            .or_else(|| {
+                data.get("message_id")
+                    .and_then(|v| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0);
 
         let message_seq = data.get("message_seq").and_then(|v| v.as_u64());
         let real_id = data.get("real_id").and_then(|v| v.as_u64());
-        let real_seq = data.get("real_seq").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let real_seq = data
+            .get("real_seq")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
 
-        let raw_message = data.get("raw_message")
+        let raw_message = data
+            .get("raw_message")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -114,7 +121,8 @@ impl Message {
 
         let font = data.get("font").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
-        let sender: Sender = data.get("sender")
+        let sender: Sender = data
+            .get("sender")
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or(Sender {
                 user_id,
@@ -128,10 +136,16 @@ impl Message {
                 title: String::new(),
             });
 
-        let anonymous = data.get("anonymous")
-            .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
+        let anonymous = data.get("anonymous").and_then(|v| {
+            if v.is_null() {
+                None
+            } else {
+                serde_json::from_value(v.clone()).ok()
+            }
+        });
 
-        let message_format = data.get("message_format")
+        let message_format = data
+            .get("message_format")
             .and_then(|v| v.as_str())
             .unwrap_or("array")
             .to_string();
@@ -151,7 +165,7 @@ impl Message {
             real_seq,
             user_id,
             group_id,
-            message: raw_message,  // 使用 raw_message 作为 message 字段
+            message: raw_message, // 使用 raw_message 作为 message 字段
             font,
             sender,
             anonymous,

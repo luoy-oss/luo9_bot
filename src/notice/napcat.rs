@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize, Serializer};
 use crate::sub_type::SubType;
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
 /// 群文件信息
@@ -15,50 +15,50 @@ pub struct FileInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HonorType {
     #[serde(rename = "talkative")]
-    Talkative,  // 群龙王
+    Talkative, // 群龙王
     #[serde(rename = "performer")]
-    Performer,  // 表演之王
+    Performer, // 表演之王
     #[serde(rename = "emotion")]
-    Emotion,    // 快乐之源
+    Emotion, // 快乐之源
 }
 
 /// OneBot v11 通知事件类型
 #[derive(Debug, Clone)]
 pub enum NoticeType {
     // 好友相关
-    FriendAdd,          // 好友添加
-    FriendRecall,       // 私聊消息撤回
-    FriendPoke,         // 好友戳一戳（通过 notify）
+    FriendAdd,    // 好友添加
+    FriendRecall, // 私聊消息撤回
+    FriendPoke,   // 好友戳一戳（通过 notify）
 
     // 群成员变动
-    GroupAdmin,         // 群聊管理员变动
-    GroupBan,           // 群聊禁言
-    GroupIncrease,      // 群聊成员增加
-    GroupDecrease,      // 群聊成员减少
+    GroupAdmin,    // 群聊管理员变动
+    GroupBan,      // 群聊禁言
+    GroupIncrease, // 群聊成员增加
+    GroupDecrease, // 群聊成员减少
 
     // 群消息相关
-    GroupCard,          // 群成员名片更新
-    GroupRecall,        // 群聊消息撤回
-    GroupUpload,        // 群聊文件上传
+    GroupCard,   // 群成员名片更新
+    GroupRecall, // 群聊消息撤回
+    GroupUpload, // 群聊文件上传
 
     // 群荣誉和头衔
-    GroupTitle,         // 群头衔变更
-    Honor,              // 群荣誉变更
+    GroupTitle, // 群头衔变更
+    Honor,      // 群荣誉变更
 
     // 精华消息
-    Essence,            // 群聊设精
+    Essence, // 群聊设精
 
     // 戳一戳和互动
-    Poke,               // 戳一戳（群内）
-    LuckyKing,          // 运气王
+    Poke,      // 戳一戳（群内）
+    LuckyKing, // 运气王
 
     // 表情回应（NapCat 扩展）
-    GroupMsgEmojiLike,  // 群消息表情回应
+    GroupMsgEmojiLike, // 群消息表情回应
 
     // 通用通知
-    Notify,             // 其他通知，需进一步通过SubType确认
+    Notify, // 其他通知，需进一步通过SubType确认
 
-    Unknown,            // 未知通知类型
+    Unknown, // 未知通知类型
 }
 
 impl Serialize for NoticeType {
@@ -131,14 +131,12 @@ impl Notice {
             Some("essence") => NoticeType::Essence,
 
             // 通知类（包含戳一戳、运气王等）
-            Some("notify") => {
-                match data.get("sub_type").and_then(|v| v.as_str()) {
-                    Some("poke") => NoticeType::Poke,
-                    Some("lucky_king") => NoticeType::LuckyKing,
-                    Some("honor") => NoticeType::Honor,
-                    Some("title") => NoticeType::GroupTitle,
-                    _ => NoticeType::Notify,
-                }
+            Some("notify") => match data.get("sub_type").and_then(|v| v.as_str()) {
+                Some("poke") => NoticeType::Poke,
+                Some("lucky_king") => NoticeType::LuckyKing,
+                Some("honor") => NoticeType::Honor,
+                Some("title") => NoticeType::GroupTitle,
+                _ => NoticeType::Notify,
             },
 
             // NapCat 扩展
@@ -147,9 +145,8 @@ impl Notice {
             _ => NoticeType::Unknown,
         };
 
-        let sub_type = SubType::deserialize(
-            data.get("sub_type").unwrap_or(&Value::Null)
-        ).unwrap_or(SubType::None);
+        let sub_type = SubType::deserialize(data.get("sub_type").unwrap_or(&Value::Null))
+            .unwrap_or(SubType::None);
 
         let user_id = data.get("user_id").and_then(|v| v.as_u64()).unwrap_or(0);
         let group_id = data.get("group_id").and_then(|v| v.as_u64());
@@ -157,18 +154,36 @@ impl Notice {
         let target_id = data.get("target_id").and_then(|v| v.as_u64());
         let message_id = data.get("message_id").and_then(|v| v.as_u64());
 
-        let file = data.get("file").and_then(|v| serde_json::from_value(v.clone()).ok());
+        let file = data
+            .get("file")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
         let duration = data.get("duration").and_then(|v| v.as_u64());
 
-        let card_new = data.get("card_new").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let card_old = data.get("card_old").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let card_new = data
+            .get("card_new")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let card_old = data
+            .get("card_old")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
-        let honor_type = data.get("honor_type")
+        let honor_type = data
+            .get("honor_type")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
 
-        let title = data.get("title").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let flag = data.get("flag").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let comment = data.get("comment").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let title = data
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let flag = data
+            .get("flag")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let comment = data
+            .get("comment")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         let time = data.get("time").and_then(|v| v.as_u64()).unwrap_or(0);
         let self_id = data.get("self_id").and_then(|v| v.as_u64()).unwrap_or(0);
