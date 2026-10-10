@@ -49,6 +49,8 @@ pub struct Request {
     pub group_id: Option<u64>,
     pub comment: String,
     pub flag: String,
+    /// 完整原始事件，保留请求事件的扩展字段。
+    pub raw_event: Value,
 }
 
 impl Request {
@@ -93,6 +95,7 @@ impl Request {
             group_id,
             comment,
             flag,
+            raw_event: data.clone(),
         }
     }
 }
