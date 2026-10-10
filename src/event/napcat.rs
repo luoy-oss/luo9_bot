@@ -34,6 +34,8 @@ pub struct MetaEvent {
     pub self_id: u64,
     pub status: Option<Status>,
     pub time: u64,
+    /// 完整原始事件，保留当前模型未覆盖的协议字段。
+    pub raw_event: Value,
 }
 
 impl MetaEvent {
@@ -56,6 +58,7 @@ impl MetaEvent {
                 .get("status")
                 .map(|v| serde_json::from_value(v.clone()).unwrap()),
             time: data.get("time").and_then(|v| v.as_u64()).unwrap_or(0),
+            raw_event: data.clone(),
         }
     }
 }
