@@ -65,8 +65,14 @@ pub struct Message {
     pub real_seq: Option<String>,
     pub user_id: u64,
     pub group_id: Option<u64>,
-    /// 纯文本消息内容（raw_message）
+    /// 兼容旧插件的纯文本消息内容（解码后的 raw_message）。
     pub message: String,
+    /// NapCat 原始 raw_message，保留协议层内容。
+    pub raw_message: String,
+    /// 结构化消息段。保留 text、image、video、file、json、forward 等任意段类型及未知字段。
+    pub message_segments: Vec<Value>,
+    /// 完整原始事件对象，用于向前兼容尚未建模的 NapCat/OneBot 字段。
+    pub raw_event: Value,
     pub font: u32,
     pub sender: Sender,
     pub anonymous: Option<Anonymous>,
@@ -117,7 +123,14 @@ impl Message {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let raw_message = decode_html_entities(&raw_message);
+        let raw_message = raw_message;
+        let message = decode_html_entities(&raw_message);
+        let message_segments = data
+            .get("message")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let raw_event = data.clone();
 
         let font = data.get("font").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
@@ -165,7 +178,10 @@ impl Message {
             real_seq,
             user_id,
             group_id,
-            message: raw_message, // 使用 raw_message 作为 message 字段
+            message, // 保持旧字段语义，避免破坏现有插件
+            raw_message,
+            message_segments,
+            raw_event,
             font,
             sender,
             anonymous,
