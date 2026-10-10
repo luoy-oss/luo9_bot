@@ -65,8 +65,14 @@ pub struct Message {
     pub real_seq: Option<String>,
     pub user_id: u64,
     pub group_id: Option<u64>,
-    /// 纯文本消息内容（raw_message）
+    /// 兼容旧插件的纯文本消息内容（解码后的 raw_message）。
     pub message: String,
+    /// NapCat 原始 raw_message，保留协议层内容。
+    pub raw_message: String,
+    /// 结构化消息段。保留 text、image、video、file、json、forward 等任意段类型及未知字段。
+    pub message_segments: Vec<Value>,
+    /// 完整原始事件对象，用于向前兼容尚未建模的 NapCat/OneBot 字段。
+    pub raw_event: Value,
     pub font: u32,
     pub sender: Sender,
     pub anonymous: Option<Anonymous>,
@@ -117,7 +123,13 @@ impl Message {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let raw_message = decode_html_entities(&raw_message);
+        let message = decode_html_entities(&raw_message);
+        let message_segments = data
+            .get("message")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let raw_event = data.clone();
 
         let font = data.get("font").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
@@ -165,7 +177,10 @@ impl Message {
             real_seq,
             user_id,
             group_id,
-            message: raw_message, // 使用 raw_message 作为 message 字段
+            message, // 保持旧字段语义，避免破坏现有插件
+            raw_message,
+            message_segments,
+            raw_event,
             font,
             sender,
             anonymous,
@@ -176,5 +191,54 @@ impl Message {
     /// 获取纯文本消息内容
     pub fn get_text(&self) -> &str {
         &self.message
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use serde_json::json;
+
+    #[test]
+    fn preserves_structured_segments_and_unknown_event_fields() {
+        let event = json!({
+            "time": 1,
+            "self_id": 2,
+            "post_type": "message",
+            "message_type": "group",
+            "message_id": "123",
+            "user_id": 4,
+            "group_id": 5,
+            "raw_message": "[CQ:video,file=clip.mp4]",
+            "message": [
+                {"type": "text", "data": {"text": "hello"}},
+                {"type": "video", "data": {"file": "clip.mp4", "extra": {"codec": "h265"}}},
+                {"type": "future_segment", "data": {"opaque": [1, 2, 3]}}
+            ],
+            "future_event_field": {"nested": true}
+        });
+        let message = Message::new(event.clone());
+
+        assert_eq!(message.message_segments.len(), 3);
+        assert_eq!(message.message_segments[1]["type"], "video");
+        assert_eq!(message.message_segments[1]["data"]["extra"]["codec"], "h265");
+        assert_eq!(message.message_segments[2]["type"], "future_segment");
+        assert_eq!(message.raw_message, "[CQ:video,file=clip.mp4]");
+        assert_eq!(message.raw_event["future_event_field"]["nested"], true);
+        assert_eq!(message.message, "[CQ:video,file=clip.mp4]");
+    }
+
+    #[test]
+    fn handles_string_message_id_and_missing_segments() {
+        let message = Message::new(json!({
+            "message_id": "42",
+            "user_id": 9,
+            "raw_message": "hello &amp; goodbye"
+        }));
+        assert_eq!(message.message_id, 42);
+        assert!(message.message_segments.is_empty());
+        assert_eq!(message.message, "hello & goodbye");
+        assert_eq!(message.raw_message, "hello &amp; goodbye");
     }
 }
