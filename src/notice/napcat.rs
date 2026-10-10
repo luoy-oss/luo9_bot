@@ -107,6 +107,8 @@ pub struct Notice {
     pub title: Option<String>,
     pub flag: Option<String>,
     pub comment: Option<String>,
+    /// 完整原始事件，保留未知通知类型及扩展字段。
+    pub raw_event: Value,
 }
 
 impl Notice {
@@ -207,6 +209,7 @@ impl Notice {
             title,
             flag,
             comment,
+            raw_event: data.clone(),
         }
     }
 }
