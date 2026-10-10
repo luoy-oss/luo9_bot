@@ -123,7 +123,6 @@ impl Message {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let raw_message = raw_message;
         let message = decode_html_entities(&raw_message);
         let message_segments = data
             .get("message")
@@ -192,5 +191,54 @@ impl Message {
     /// 获取纯文本消息内容
     pub fn get_text(&self) -> &str {
         &self.message
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use serde_json::json;
+
+    #[test]
+    fn preserves_structured_segments_and_unknown_event_fields() {
+        let event = json!({
+            "time": 1,
+            "self_id": 2,
+            "post_type": "message",
+            "message_type": "group",
+            "message_id": "123",
+            "user_id": 4,
+            "group_id": 5,
+            "raw_message": "[CQ:video,file=clip.mp4]",
+            "message": [
+                {"type": "text", "data": {"text": "hello"}},
+                {"type": "video", "data": {"file": "clip.mp4", "extra": {"codec": "h265"}}},
+                {"type": "future_segment", "data": {"opaque": [1, 2, 3]}}
+            ],
+            "future_event_field": {"nested": true}
+        });
+        let message = Message::new(event.clone());
+
+        assert_eq!(message.message_segments.len(), 3);
+        assert_eq!(message.message_segments[1]["type"], "video");
+        assert_eq!(message.message_segments[1]["data"]["extra"]["codec"], "h265");
+        assert_eq!(message.message_segments[2]["type"], "future_segment");
+        assert_eq!(message.raw_message, "[CQ:video,file=clip.mp4]");
+        assert_eq!(message.raw_event["future_event_field"]["nested"], true);
+        assert_eq!(message.message, "[CQ:video,file=clip.mp4]");
+    }
+
+    #[test]
+    fn handles_string_message_id_and_missing_segments() {
+        let message = Message::new(json!({
+            "message_id": "42",
+            "user_id": 9,
+            "raw_message": "hello &amp; goodbye"
+        }));
+        assert_eq!(message.message_id, 42);
+        assert!(message.message_segments.is_empty());
+        assert_eq!(message.message, "hello & goodbye");
+        assert_eq!(message.raw_message, "hello &amp; goodbye");
     }
 }
